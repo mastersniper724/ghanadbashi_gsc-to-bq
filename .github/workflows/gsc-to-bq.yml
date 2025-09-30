@@ -1,0 +1,50 @@
+name: GSC to BigQuery (final-safe)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 22 * * *'  # 02:00 Tehran ≈ 22:30 UTC day before
+
+jobs:
+  run-gsc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-api-python-client google-cloud-bigquery google-cloud-bigquery-storage pandas pyarrow pandas-gbq
+
+      - name: Write Service Account Key (supports base64 or raw JSON)
+        shell: bash
+        run: |
+          # prefer base64 secret if present
+          if [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" ]; then
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" | base64 --decode > gcp-key.json || { echo "ERROR: base64 decode failed"; exit 1; }
+            echo "WROTE: gcp-key.json from GHANADBASHI_GCP_SA_KEY_BASE64"
+          else
+            if [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" ]; then
+              printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" > gcp-key.json
+              echo "WROTE: gcp-key.json from GHANADBASHI_GCP_SA_KEY (raw)"
+            else
+              echo "ERROR: No secret found. Create GHANADBASHI_GCP_SA_KEY_BASE64 or GHANADBASHI_GCP_SA_KEY"
+              exit 1
+            fi
+          fi
+          echo "gcp-key.json size:" $(wc -c < gcp-key.json)
+
+      - name: Validate JSON (single-line python, no heredoc)
+        run: python -c "import json,sys; json.load(open('gcp-key.json')); print('✅ gcp-key.json is valid')"
+
+      - name: Run gsc-to-bq
+        env:
+          SERVICE_ACCOUNT_FILE: gcp-key.json
+        run: python gsc-to-bq.py
