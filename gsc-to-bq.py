@@ -65,8 +65,13 @@ def ensure_table():
         print(f"[INFO] Table {BQ_TABLE} created.", flush=True)
 
 # ---------- HELPER: create unique key ----------
-def generate_key(date, query, page):
-    return hashlib.md5(f"{date}||{query}||{page}".encode()).hexdigest()
+def stable_key(row):
+    s = "|".join([
+        row.get('Query','') or '',
+        row.get('Page','') or '',
+        str(row.get('Date',''))
+    ])
+    return hashlib.sha256(s.encode('utf-8')).hexdigest()
 
 # ---------- FETCH EXISTING KEYS FROM BIGQUERY ----------
 def get_existing_keys():
