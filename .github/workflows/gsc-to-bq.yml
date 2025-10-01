@@ -1,51 +1,48 @@
-name: GSC to BigQuery (final-safe)
+name: GSC to BigQuery (Incremental Daily)
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '30 22 * * *'  # 22:30 UTC ≈ 02:00 Tehran (روز بعد)
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 jobs:
-  run-gsc:
+  sync-gsc-to-bq:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir google-api-python-client google-cloud-bigquery google-cloud-bigquery-storage pandas pyarrow pandas-gbq db-dtypes
+          pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client google-cloud-bigquery tqdm pandas pyarrow db-dtypes
 
-      - name: Write Service Account Key (supports base64 or raw JSON)
-        shell: bash
+      - name: Write GCP credentials file
         run: |
           if [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" ]; then
-            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" | base64 --decode > gcp-key.json || { echo "ERROR: base64 decode failed"; exit 1; }
-            echo "WROTE: gcp-key.json from GHANADBASHI_GCP_SA_KEY_BASE64"
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" | base64 --decode > gcp-key.json
+            echo "✅ WROTE: gcp-key.json from GHANADBASHI_GCP_SA_KEY_BASE64"
+          elif [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" ]; then
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" > gcp-key.json
+            echo "✅ WROTE: gcp-key.json from GHANADBASHI_GCP_SA_KEY (raw)"
           else
-            if [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" ]; then
-              printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" > gcp-key.json
-              echo "WROTE: gcp-key.json from GHANADBASHI_GCP_SA_KEY (raw)"
-            else
-              echo "ERROR: No secret found. Create GHANADBASHI_GCP_SA_KEY_BASE64 or GHANADBASHI_GCP_SA_KEY"
-              exit 1
-            fi
+            echo "❌ ERROR: Missing GCP credentials secret."
+            exit 1
           fi
           echo "gcp-key.json size:" $(wc -c < gcp-key.json)
 
-      - name: Validate JSON key
-        run: python -c "import json,sys; json.load(open('gcp-key.json')); print('✅ gcp-key.json is valid')"
+      - name: Validate gcp-key.json
+        run: python -c "import json; json.load(open('gcp-key.json')); print('✅ gcp-key.json is valid')"
 
-      - name: Run gsc_to_bq
+      - name: Run GSC → BigQuery Incremental Sync
         env:
-          SERVICE_ACCOUNT_FILE: gcp-key.json
+          GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
         run: |
+          echo "🚀 Running incremental GSC sync..."
           python gsc_to_bq.py
