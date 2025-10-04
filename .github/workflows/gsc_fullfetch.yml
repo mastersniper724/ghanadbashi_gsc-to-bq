@@ -1,0 +1,73 @@
+name: GSC Full Fetch to BigQuery (rev0)
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Start date (YYYY-MM-DD)'
+        required: true
+        default: '2024-08-01'
+      end_date:
+        description: 'End date (YYYY-MM-DD)'
+        required: true
+        default: '2025-09-30'
+      debug:
+        description: 'Enable debug mode'
+        required: false
+        default: 'false'
+
+jobs:
+  fullfetch-gsc-to-bq:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client google-cloud-bigquery tqdm pandas pyarrow db-dtypes pandas_gbq
+
+      - name: Write GCP credentials file
+        run: |
+          if [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" ]; then
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" | base64 --decode > gcp-key.json
+          elif [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" ]; then
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" > gcp-key.json
+          else
+            echo "❌ ERROR: Missing GCP credentials secret."
+            exit 1
+          fi
+
+      - name: Validate gcp-key.json
+        run: python -c "import json; json.load(open('gcp-key.json'))"
+
+      - name: Run Full Fetch Python
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+            DEBUG_FLAG="--debug"
+          else
+            DEBUG_FLAG=""
+          fi
+          CSV_TEST_FILE="gsc_fullfetch_test_rev02_${{ github.run_id }}.csv"
+
+          python gsc_to_bq_fullfetch.py \
+            $DEBUG_FLAG \
+            --start-date "${{ github.event.inputs.start_date }}" \
+            --end-date "${{ github.event.inputs.end_date }}" \
+            --csv-test "${CSV_TEST_FILE}"
+
+      - name: Upload CSV test output
+        if: ${{ github.event.inputs.debug == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc_fullfetch_test_csv_rev02
+          path: gsc_fullfetch_test_rev02_*.csv
