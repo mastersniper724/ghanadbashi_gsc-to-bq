@@ -1,6 +1,8 @@
-name: GSC (searchAppearance) Full Fetch to BigQuery (rev0)
+name: GSC (searchAppearance) Full Fetch to BigQuery (rev1)
 
 on:
+  schedule:
+    - cron: '30 22 * * *'  # هر روز ساعت 22:30 UTC = 2:00 صبح تهران
   workflow_dispatch:
     inputs:
       start_date:
@@ -52,22 +54,27 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
         shell: bash
         run: |
-          if [ "${{ github.event.inputs.debug }}" = "true" ]; then
-            DEBUG_FLAG="--debug"
-          else
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Compute last 7-day period (week ending yesterday)
+            END_DATE=$(date -u -d "yesterday" +"%Y-%m-%d")
+            START_DATE=$(date -u -d "$END_DATE -6 days" +"%Y-%m-%d")
             DEBUG_FLAG=""
+          else
+            # Manual run (workflow_dispatch)
+            if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+              DEBUG_FLAG="--debug"
+            else
+              DEBUG_FLAG=""
+            fi
+            START_DATE="${{ github.event.inputs.start_date }}"
+            END_DATE="${{ github.event.inputs.end_date }}"
           fi
-          CSV_TEST_FILE="gsc_fullfetch_test_rev03_${{ github.run_id }}.csv"
+
+          echo "📅 Fetching from $START_DATE to $END_DATE"
+
+          CSV_TEST_FILE="gsc_fullfetch_test_rev02_${{ github.run_id }}.csv"
 
           python gsc_to_bq_searchappearance_fullfetch.py \
             $DEBUG_FLAG \
-            --start-date "${{ github.event.inputs.start_date }}" \
-            --end-date "${{ github.event.inputs.end_date }}" \
-            --csv-test "${CSV_TEST_FILE}"
-
-      - name: Upload CSV test output
-        if: ${{ github.event.inputs.debug == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: gsc_fullfetch_test_csv_rev03
-          path: gsc_fullfetch_test_rev03_*.csv
+            --start-date "$START_DATE" \
+            --end-date "$END_DATE" \
