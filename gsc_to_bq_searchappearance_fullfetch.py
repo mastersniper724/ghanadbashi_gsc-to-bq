@@ -1,6 +1,6 @@
 # =================================================
 # FILE: gsc_to_bq_searchappearance_fullfetch.py
-# REV: 0
+# REV: 1
 # PURPOSE: Full fetch SearchAppearance data from GSC to BigQuery
 #          + allocation applied on new or existing Raw data
 #          + Direct / Sample-driven / Proportional allocation base
@@ -154,17 +154,14 @@ def fetch_searchappearance_data(start_date, end_date):
     return df_batch
 
 # =================================================
-# BLOCK 6: UPLOAD FUNCTIONS
-# =================================================
-# =================================================
-# BLOCK 6: UPLOAD FUNCTIONS (Updated for 6.5.15)
+# BLOCK 6: UPLOAD FUNCTIONS (Updated with Duplicate Prevention)
 # =================================================
 def upload_to_bq(df, table_name):
     if df.empty:
         print(f"[INFO] No new rows to insert into {table_name}.", flush=True)
         return
 
-    # --- Determine schema type and numeric columns ---
+    # --- Determine numeric columns ---
     if 'Clicks' in df.columns:
         numeric_cols = ['Clicks','Impressions','CTR','Position']
     elif 'Clicks_alloc' in df.columns:
@@ -175,13 +172,37 @@ def upload_to_bq(df, table_name):
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    # --- Ensure fully-qualified table_id ---
-    full_table_id = f"{BQ_PROJECT}.{BQ_DATASET}.{table_name}"
+    # --- Ensure unique_key exists ---
+    if 'unique_key' not in df.columns:
+        print(f"[WARNING] No 'unique_key' column found in {table_name}. Skipping duplicate check.", flush=True)
+        df_filtered = df.copy()
+    else:
+        # --- Get existing keys from BigQuery ---
+        full_table_id = f"{BQ_PROJECT}.{BQ_DATASET}.{table_name}"
+        query_existing = f"SELECT unique_key FROM `{full_table_id}`"
+        try:
+            existing_df = bq_client.query(query_existing).to_dataframe()
+            existing_keys = set(existing_df['unique_key'].dropna().tolist())
+            print(f"[INFO] Retrieved {len(existing_keys)} existing keys from {table_name}.", flush=True)
+        except Exception as e:
+            print(f"[WARNING] Could not retrieve existing keys: {e}", flush=True)
+            existing_keys = set()
 
+        # --- Filter out duplicates ---
+        df_filtered = df[~df['unique_key'].isin(existing_keys)].copy()
+        skipped = len(df) - len(df_filtered)
+        print(f"[INFO] {len(df_filtered)} new rows to insert, {skipped} duplicates skipped.", flush=True)
+
+    if df_filtered.empty:
+        print(f"[INFO] No new rows to insert after duplicate filtering for {table_name}.", flush=True)
+        return
+
+    # --- Upload filtered data ---
+    full_table_id = f"{BQ_PROJECT}.{BQ_DATASET}.{table_name}"
     try:
         job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
-        bq_client.load_table_from_dataframe(df, full_table_id, job_config=job_config).result()
-        print(f"[INFO] Inserted {len(df)} rows to {full_table_id}.", flush=True)
+        bq_client.load_table_from_dataframe(df_filtered, full_table_id, job_config=job_config).result()
+        print(f"[INFO] Inserted {len(df_filtered)} rows to {full_table_id}.", flush=True)
     except Exception as e:
         print(f"[ERROR] Failed to insert rows: {e}", flush=True)
 
@@ -190,58 +211,90 @@ def upload_to_bq(df, table_name):
 # BLOCK 7: ALLOCATION FUNCTIONS (DIRECT / SAMPLE / PROPORTIONAL)
 # =================================================
 def direct_allocation(df_raw, mapping_df=None):
+    """
+    Direct allocation of SearchAppearance data to TargetEntity with deduplication.
+    Ensures each unique (SearchAppearance, TargetEntity, fetch_id) combination appears once.
+    """
+
+    # 🧩 اگر مپینگ ارسال نشده باشه، از خود SearchAppearance استفاده می‌کنیم
     if mapping_df is None or mapping_df.empty:
         mapping_df = pd.DataFrame({
-            'SearchAppearance': df_raw['SearchAppearance'],
-            'TargetEntity': df_raw['SearchAppearance']
+            'SearchAppearance': df_raw['SearchAppearance'].unique(),
+            'TargetEntity': df_raw['SearchAppearance'].unique()
         })
+
+    # 🧩 اتصال داده خام به مپینگ
     df = df_raw.merge(mapping_df, on='SearchAppearance', how='left')
+
+    # 🧩 محاسبه شاخص‌های تخصیص
     df['AllocationMethod'] = 'direct'
     df['AllocationWeight'] = 1.0
     df['Clicks_alloc'] = df['Clicks'] * df['AllocationWeight']
     df['Impressions_alloc'] = df['Impressions'] * df['AllocationWeight']
-    df['CTR_alloc'] = df['Clicks_alloc'] / df['Impressions_alloc'].replace(0,1)
+    df['CTR_alloc'] = df['Clicks_alloc'] / df['Impressions_alloc'].replace(0, 1)
     df['Position_alloc'] = df['Position']
+
+    # 🧩 افزودن شناسه فچ و کلید یکتا
     df['fetch_id'] = df_raw['fetch_id']
-    df['unique_key'] = df.apply(lambda r: hashlib.sha256(f"{r['SearchAppearance']}|{r.get('TargetEntity','')}|{r['fetch_id']}".encode()).hexdigest(), axis=1)
-    return df
+    df['unique_key'] = df.apply(
+        lambda r: hashlib.sha256(
+            f"{r['SearchAppearance']}|{r.get('TargetEntity','')}|{r['fetch_id']}".encode()
+        ).hexdigest(),
+        axis=1
+    )
+
+    # 🧩 حذف رکوردهای تکراری بر اساس unique_key
+    before_count = len(df)
+    df.drop_duplicates(subset=['unique_key'], inplace=True)
+    after_count = len(df)
+    if after_count < before_count:
+        print(f"[INFO] Removed {before_count - after_count} duplicate rows from allocation.", flush=True)
+
+    # 🧩 بازگرداندن ستون‌های نهایی مطابق با جدول Allocated
+    df_alloc = df[['SearchAppearance', 'TargetEntity', 'AllocationMethod', 'AllocationWeight',
+                   'Clicks_alloc', 'Impressions_alloc', 'CTR_alloc', 'Position_alloc',
+                   'fetch_id', 'unique_key']]
+
+    return df_alloc
+
 
 def sample_driven_allocation(df_raw, mapping_df=None):
     # Placeholder for future sample-driven allocation logic
     return direct_allocation(df_raw, mapping_df)  # fallback to direct for now
+
 
 def proportional_allocation(df_raw, mapping_df=None):
     # Placeholder for future proportional allocation logic
     return direct_allocation(df_raw, mapping_df)  # fallback to direct for now
 
 # =================================================
-# BLOCK 8: MAIN FUNCTION (Updated for 6.5.13)
-# =================================================
-# =================================================
-# BLOCK 8: MAIN FUNCTION (Updated for 6.5.15)
+# BLOCK 8: MAIN FUNCTION (Updated for Rev.1)
 # =================================================
 def main():
+    # 🧩 اطمینان از وجود جدول Raw
     ensure_table(BQ_TABLE_RAW)
+
+    # 🧩 فچ داده‌ها از GSC
     df_new = fetch_searchappearance_data(START_DATE, END_DATE)
     upload_to_bq(df_new, BQ_TABLE_RAW)
 
-    # --- If no new rows, fetch existing Raw data for allocation ---
+    # 🧩 اگر داده جدیدی نبود، داده‌های موجود برای تخصیص بارگذاری می‌شن
     if df_new.empty:
         print("[INFO] No new Raw rows, fetching existing Raw data for allocation...")
-        query = f"SELECT * FROM `{BQ_PROJECT}.{BQ_DATASET}.{BQ_TABLE_RAW}` WHERE fetch_date >= '{START_DATE}'"
+        query = f"""
+            SELECT * FROM `{BQ_PROJECT}.{BQ_DATASET}.{BQ_TABLE_RAW}`
+            WHERE fetch_date >= '{START_DATE}'
+        """
         df_new = bq_client.query(query).to_dataframe()
         df_new['fetch_date'] = pd.to_datetime(df_new['fetch_date']).dt.date
 
+    # 🧩 اطمینان از وجود جدول Allocated
     ensure_table(BQ_TABLE_ALLOC)
 
-    # --- Apply allocation (currently only direct active, others as placeholder) ---
+    # 🧩 اعمال روش تخصیص (فعلاً فقط Direct فعال است)
     df_alloc = direct_allocation(df_new)
 
-    # --- Keep only columns expected by Allocated table schema ---
-    df_alloc = df_alloc[['SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight',
-                         'Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc',
-                         'fetch_id','unique_key']]
-
+    # 🧩 آپلود نتایج نهایی به BigQuery
     upload_to_bq(df_alloc, BQ_TABLE_ALLOC)
 
     print("[INFO] Finished processing SearchAppearance data.", flush=True)
