@@ -49,16 +49,20 @@ jobs:
       - name: Validate gcp-key.json
         run: python -c "import json; json.load(open('gcp-key.json'))"
 
-      - name: Run Daily Snapshot Python (Delay Aware)
+      - name: Run Full Fetch Python (REV 6.5.8)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
         shell: bash
         run: |
-          # GSC always lags 2 days behind
-          TARGET_DATE=$(date -u -d "2 days ago" +"%Y-%m-%d")
-
-          echo "📅 Fetching Search Appearance data for $TARGET_DATE"
+          if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+            DEBUG_FLAG="--debug"
+          else
+            DEBUG_FLAG=""
+          fi
+          CSV_TEST_FILE="gsc_fullfetch_test_rev03_${{ github.run_id }}.csv"
 
           python gsc_to_bq_searchappearance_fullfetch.py \
-            --start-date "$TARGET_DATE" \
-            --end-date "$TARGET_DATE"
+            $DEBUG_FLAG \
+            --start-date "${{ github.event.inputs.start_date }}" \
+            --end-date "${{ github.event.inputs.end_date }}" \
+            --csv-test "${CSV_TEST_FILE}"
