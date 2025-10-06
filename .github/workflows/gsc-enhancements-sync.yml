@@ -1,0 +1,76 @@
+name: GSC Enhancements Sync (R.1)
+
+on:
+  schedule:
+    # اجرای روزانه ساعت 02:00 UTC (می‌تونی تغییر بدی)
+    - cron: "0 2 * * *"
+  workflow_dispatch:  # اجازه اجرای دستی از تب Actions
+
+jobs:
+  sync-enhancements:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl google-cloud-bigquery google-auth google-cloud-bigquery-storage db-dtypes pandas_gbq
+
+      - name: Write GCP credentials file
+        run: |
+          if [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" ]; then
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY_BASE64 }}" | base64 --decode > gcp-key.json
+          elif [ -n "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" ]; then
+            printf "%s" "${{ secrets.GHANADBASHI_GCP_SA_KEY }}" > gcp-key.json
+          else
+            echo "❌ ERROR: Missing GCP credentials secret."
+            exit 1
+          fi
+
+      - name: Validate gcp-key.json
+        run: python -c "import json; json.load(open('gcp-key.json'))"
+
+      - name: Run Full Fetch Python
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Compute last 7-day period (week ending yesterday)
+            END_DATE=$(date -u -d "yesterday" +"%Y-%m-%d")
+            START_DATE=$(date -u -d "$END_DATE -6 days" +"%Y-%m-%d")
+            DEBUG_FLAG=""
+          else
+            # Manual run (workflow_dispatch)
+            if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+              DEBUG_FLAG="--debug"
+            else
+              DEBUG_FLAG=""
+            fi
+            START_DATE="${{ github.event.inputs.start_date }}"
+            END_DATE="${{ github.event.inputs.end_date }}"
+          fi
+
+          echo "📅 Fetching from $START_DATE to $END_DATE"
+
+          CSV_TEST_FILE="gsc_fullfetch_test_rev02_${{ github.run_id }}.csv"
+
+          python scripts/upload_gsc_enhancements.py \
+            $DEBUG_FLAG \
+            --start-date "$START_DATE" \
+            --end-date "$END_DATE" \
+            --csv-test "${CSV_TEST_FILE}"
+
+#      - name: Run GSC Enhancements Sync Script
+#        env:
+#          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp-key.json
+#        run: |
+#          python scripts/upload_gsc_enhancements.py
