@@ -1,9 +1,9 @@
-name: GSC Enhancements Sync (R.0)
+name: GSC Enhancements Sync (R.1)
 
 on:
-  schedule:
+#  schedule:
     # اجرای روزانه ساعت 02:00 UTC (می‌تونی تغییر بدی)
-    - cron: "0 2 * * *"
+#    - cron: "0 2 * * *"
   workflow_dispatch:  # اجازه اجرای دستی از تب Actions
 
 jobs:
@@ -19,10 +19,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      # ✅ مرحله‌ی کش کردن پکیج‌های pip
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ✅ نصب ماژول‌ها از فایل requirements.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas openpyxl google-cloud-bigquery google-auth google-cloud-bigquery-storage db-dtypes pandas_gbq
+          pip install -r requirements.txt
 
       - name: Write GCP credentials file
         run: |
