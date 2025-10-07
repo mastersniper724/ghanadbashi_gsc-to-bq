@@ -1,5 +1,12 @@
 google-api-python-client
 google-auth
 google-auth-httplib2
+google-auth-oauthlib
 google-cloud-bigquery
+google-cloud-bigquery-storage
 pandas
+pandas_gbq
+tqdm
+pyarrow
+db-dtypes
+openpyxl
