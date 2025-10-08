@@ -73,7 +73,7 @@ jobs:
 
           CSV_TEST_FILE="gsc_fullfetch_test_rev02_${{ github.run_id }}.csv"
 
-          python scripts/upload_gsc_enhancements.py \
+          python src/scripts/upload_gsc_enhancements.py \
             $DEBUG_FLAG \
             --start-date "$START_DATE" \
             --end-date "$END_DATE" \

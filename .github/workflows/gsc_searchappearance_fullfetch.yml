@@ -1,8 +1,19 @@
-name: GSC (searchAppearance) Full Fetch to BigQuery (rev۲)
+# ============================================================
+# Filename: gsc_searchappearance_fullfetch.yml
+# Python :  gsc_to_bq_searchappearance_fullfetch.py
+# Revision: Rev.02
+# Purpose: As Google's complete and full available data is just for official 4 days before
+#          fetch time, so to avoid void data and dates and for Daily Search Appearance real data,
+#          better to set 4 days refering to END_DATE and TARGET_DATE="4 days ago" so will will get
+#          Daily data for Other Search Appearance data
+# ============================================================
+
+name: GSC (searchAppearance) Daily Snapshot to BigQuery
 
 on:
   schedule:
-    - cron: '30 22 * * *'  # هر روز ساعت 22:30 UTC = 2:00 صبح تهران
+    # GitHub Actions uses UTC → 01:00 UTC = 04:30 Tehran time
+    - cron: '00 01 * * *'
   workflow_dispatch:
     inputs:
       start_date:
@@ -19,8 +30,9 @@ on:
         default: 'false'
 
 jobs:
-  gsc-daily-snapshot:
+  sync-enhancements:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,10 +42,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      # ✅ مرحله‌ی کش کردن پکیج‌های pip
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ✅ نصب ماژول‌ها از فایل requirements.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client google-cloud-bigquery tqdm pandas pyarrow db-dtypes pandas_gbq
+          pip install -r requirements.txt
 
       - name: Write GCP credentials file
         run: |
@@ -54,11 +76,11 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
         shell: bash
         run: |
-          # GSC always lags 2 days behind
-          TARGET_DATE=$(date -u -d "2 days ago" +"%Y-%m-%d")
+          # GSC always lags 4 days behind (the Onlay last available Google data date)
+          TARGET_DATE=$(date -u -d "4 days ago" +"%Y-%m-%d")
 
           echo "📅 Fetching Search Appearance data for $TARGET_DATE"
 
-          python gsc_to_bq_searchappearance_fullfetch.py \
+          python src/scripts/gsc_to_bq_searchappearance_fullfetch.py \
             --start-date "$TARGET_DATE" \
             --end-date "$TARGET_DATE"
