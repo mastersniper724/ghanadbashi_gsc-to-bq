@@ -64,7 +64,7 @@ table_ref = bq_client.dataset(BQ_DATASET).table(BQ_TABLE)
 client = bigquery.Client()
 query = """
     SELECT country_code_alpha3 AS country_code, country_name
-    FROM `bamtabridsazan.seo_reports.00_00_gsc_dim_country`
+    FROM `ghanadbashi.seo_reports.00_00_gsc_dim_country`
 """
 df_country = client.query(query).to_dataframe()
 df_country["country_code"] = df_country["country_code"].str.upper()
@@ -384,7 +384,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
 
     # ======= نحوه فراخوانی =======
     # توجه: BQ_TABLE باید مقداردهی شده باشد به full table id یا اگر در بالای فایل تعریف کرده‌ای:
-    # BQ_TABLE = "bamtabridsazan.seo_reports.bamtabridsazan__gsc__raw_domain_data_fullfetch"
+    # BQ_TABLE = "ghanadbashi.seo_reports.ghanadbashi__gsc__raw_domain_data_fullfetch"
     existing_bq_keys = get_existing_sitewide_keys(START_DATE, END_DATE, BQ_PROJECT, BQ_DATASET, BQ_TABLE)
 
     # ---------- Step 1: fetch actual GSC rows for ['date'] ----------
