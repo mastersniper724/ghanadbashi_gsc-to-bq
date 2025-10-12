@@ -74,6 +74,7 @@ jobs:
       - name: Run Full Fetch Python
         env:
           GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
+          PYTHONPATH: src
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then
