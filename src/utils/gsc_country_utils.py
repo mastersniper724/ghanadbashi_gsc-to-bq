@@ -97,7 +97,7 @@ def robust_map_country_column(df: pd.DataFrame, country_col: str, country_map: d
             pass
 
         # not found
-        return None
+        return "__NO_COUNTRY__"
 
     # apply mapping
     df[new_col] = df[country_col].apply(map_one)
