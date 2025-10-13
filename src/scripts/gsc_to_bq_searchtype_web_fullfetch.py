@@ -229,7 +229,7 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                     "Page": page,
                     "Country": country,
                     "Device": device,
-                    "SearchAppearance": None,  #Null
+                    "SearchAppearance": "__NO_APPEARANCE__",
                     "Clicks": r.get("clicks", 0),
                     "Impressions": r.get("impressions", 0),
                     "CTR": r.get("ctr", 0.0),
@@ -327,9 +327,9 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
                         "Date": keys[0],
                         "Query": "__NO_INDEX__",
                         "Page": "__NO_INDEX__",
-                        "Country": None,
-                        "Device": None,
-                        "SearchAppearance": None,  #Null
+                        "Country": "__NO_COUNTRY__",
+                        "Device": "__NO_DEVICE__",
+                        "SearchAppearance": "__NO_APPEARANCE__",
                         "Clicks": r.get("clicks", 0),
                         "Impressions": r.get("impressions", 0),
                         "CTR": r.get("ctr", 0.0),
@@ -421,9 +421,9 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                 "Date": date,
                 "Query": "__SITE_TOTAL__",
                 "Page": "__SITE_TOTAL__",
-                "Country": None,
-                "Device": None,
-                "SearchAppearance": None,  # Null
+                "Country": "__NO_COUNTRY__",
+                "Device": "__NO_DEVICE__",
+                "SearchAppearance": "__NO_APPEARANCE__",
                 "Clicks": r.get("clicks", 0),
                 "Impressions": r.get("impressions", 0),
                 "CTR": r.get("ctr", 0.0),
@@ -471,13 +471,13 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                 "Date": date_str,
                 "Query": "__SITE_TOTAL__",
                 "Page": "__SITE_TOTAL__",
-                "Country": None,
-                "Device": None,
-                "SearchAppearance": None,  # Null
-                "Clicks": None,
-                "Impressions": None,
-                "CTR": None,
-                "Position": None,
+                "Country": "__NO_COUNTRY__",
+                "Device": "__NO_DEVICE__",
+                "SearchAppearance": "__NO_APPEARANCE__",  # Null
+                "Clicks": 0,
+                "Impressions": 0,
+                "CTR": 0,
+                "Position": 0,
                 "SearchType": "web",
             }
             unique_key = generate_unique_key(placeholder_row)
@@ -546,9 +546,9 @@ def main():
                         "Date": keys[0],
                         "Query": "__PAGE_TOTAL__",
                         "Page": keys[1],
-                        "Country": None,
-                        "Device": None,
-                        "SearchAppearance": None,  #Null
+                        "Country": "__NO_COUNTRY__",
+                        "Device": "__NO_DEVICE__",
+                        "SearchAppearance": "__NO_APPEARANCE__",
                         "Clicks": r.get("clicks", 0),
                         "Impressions": r.get("impressions", 0),
                         "CTR": r.get("ctr", 0.0),
