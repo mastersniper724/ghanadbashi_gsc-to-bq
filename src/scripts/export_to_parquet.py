@@ -1,20 +1,26 @@
-from google.cloud import bigquery
 import pandas as pd
+from google.cloud import bigquery
 
-# اتصال به BigQuery
-client = bigquery.Client(project="ghanadbashi")
+# Client
+client = bigquery.Client()
 
-# کوئری نمونه (میتونی با هر جدولی جایگزینش کنی)
+# Query dataset کامل (مثال جدول weekly summary)
 query = """
-SELECT * 
+SELECT *
 FROM `ghanadbashi.seo_reports.00_02__ghanadbashi__gsc__raw_domain_data_webtype_fullfetch_null_safe_cast`
-LIMIT 5000
 """
 
-# اجرای کوئری و گرفتن دیتا در DataFrame
-df = client.query(query).to_dataframe()
+# Job configuration برای export به Parquet
+job_config = bigquery.QueryJobConfig()
+destination_uri = "gsc_full_dataset.parquet"
 
-# ذخیره در فایل Parquet داخل Cloud Shell
-output_path = "/home/master_sniper724/gsc_weekly_summary.parquet"
-df.to_parquet(output_path, index=False)
-print(f"✅ File saved at: {output_path}")
+# Run query and fetch all rows
+query_job = client.query(query)
+rows = query_job.result()  # this fetches all rows (pagination handled internally)
+
+# Write to Parquet using pandas
+import pandas as pd
+
+df = rows.to_dataframe()
+df.to_parquet(destination_uri, engine="pyarrow", index=False)
+print(f"Parquet created: {destination_uri}, rows: {len(df)}")
