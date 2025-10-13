@@ -12,7 +12,7 @@ FROM `ghanadbashi.seo_reports.00_02__ghanadbashi__gsc__raw_domain_data_webtype_f
 
 # Job configuration برای export به Parquet
 job_config = bigquery.QueryJobConfig()
-destination_uri = "gsc_full_dataset.parquet"
+destination_uri = "gsc_full_dataset_full.parquet"
 
 # Run query and fetch all rows
 query_job = client.query(query)
