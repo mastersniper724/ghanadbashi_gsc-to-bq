@@ -1,44 +1,55 @@
-# =====================================================
-# File: export_to_parquet_chunked.py
-# Purpose: Export large GSC dataset from BigQuery to a single Parquet file in chunks
-# =====================================================
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-from google.cloud import bigquery
+import os
 import pandas as pd
-import pyarrow.parquet as pq
-import pyarrow as pa
+from google.cloud import bigquery
 
-# ===================== CONFIG ========================
-PROJECT_ID = "ghanadbashi"   # جایگذاری با پروژه شما
-DATASET = "seo_reports"     # dataset شما
-TABLE = "00_02__ghanadbashi__gsc__raw_domain_data_webtype_fullfetch_null_safe_cast"         # جدول هدف
-OUTPUT_FILE = "/home/master_sniper724/gsc_weekly_summary_full.parquet"
-CHUNK_SIZE = 10000           # تعداد ردیف در هر batch
+# ======================
+# تنظیمات
+# ======================
+PROJECT_ID = "ghanadbashi"  # Project ID درست
+DATASET_TABLE = "seo_reports.00_02__ghanadbashi__gsc__raw_domain_data_webtype_fullfetch_null_safe_cast"  # Dataset.Table درست
+CHUNK_SIZE = 10000          # تعداد ردیف هر چانک
+OUTPUT_DIR = "./"           # مسیر ذخیره فایل Parquet
 
-# ===================== CLIENT ========================
+# ======================
+# اتصال به BigQuery
+# ======================
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/master_sniper724/gcp-key.json"
 client = bigquery.Client(project=PROJECT_ID)
 
-# ===================== QUERY =========================
-query = f"""
-SELECT *
-FROM `{PROJECT_ID}.{DATASET}.{TABLE}`
-ORDER BY Date, Query
-"""
+# ======================
+# اجرای کوئری
+# ======================
+query = f"SELECT * FROM `{PROJECT_ID}.{DATASET_TABLE}`"
 query_job = client.query(query)
+iterator = query_job.result()  # بدون page_size → RowIterator
 
-# ===================== CHUNKED EXPORT =================
-dfs = []
+# ======================
+# خواندن چانک به چانک
+# ======================
 print(f"Start reading data in chunks of {CHUNK_SIZE} rows...")
-iterator = query_job.result(page_size=CHUNK_SIZE)
 
-for i, page in enumerate(iterator.pages, start=1):
-    df_chunk = page.to_dataframe()
-    dfs.append(df_chunk)
-    print(f"Chunk {i} read, {len(df_chunk)} rows.")
+chunk_number = 0
+current_chunk = []
 
-# ===================== CONCAT & EXPORT =================
-full_df = pd.concat(dfs, ignore_index=True)
-print(f"Total rows collected: {len(full_df)}")
-table = pa.Table.from_pandas(full_df)
-pq.write_table(table, OUTPUT_FILE, compression="SNAPPY")
-print(f"Data exported successfully to {OUTPUT_FILE}")
+for i, row in enumerate(iterator):
+    current_chunk.append(dict(row))
+    
+    if (i + 1) % CHUNK_SIZE == 0:
+        df_chunk = pd.DataFrame(current_chunk)
+        output_file = os.path.join(OUTPUT_DIR, f"gsc_weekly_summary_chunk_{chunk_number}.parquet")
+        df_chunk.to_parquet(output_file, index=False)
+        print(f"Saved chunk {chunk_number} → {output_file} ({len(df_chunk)} rows)")
+        current_chunk = []
+        chunk_number += 1
+
+# ذخیره باقی‌مانده ردیف‌ها
+if current_chunk:
+    df_chunk = pd.DataFrame(current_chunk)
+    output_file = os.path.join(OUTPUT_DIR, f"gsc_weekly_summary_chunk_{chunk_number}.parquet")
+    df_chunk.to_parquet(output_file, index=False)
+    print(f"Saved final chunk {chunk_number} → {output_file} ({len(df_chunk)} rows)")
+
+print("All chunks saved successfully!")
