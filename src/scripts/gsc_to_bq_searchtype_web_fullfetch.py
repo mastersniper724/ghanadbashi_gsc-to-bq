@@ -515,7 +515,7 @@ def main():
     df_noindex, inserted_noindex = fetch_noindex_batch(START_DATE, END_DATE, existing_keys)
 
     # ----------------------------
-    # B. Fetch Batch 4: Date + Page (Page IS NOT NULL)
+    # B. Fetch Batch 6: Date + Page (Page IS NOT NULL)
     # ----------------------------
     print("[INFO] Fetching Batch 6 (Date + Page, excluding NULL pages)...", flush=True)
     try:
