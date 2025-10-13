@@ -11,7 +11,7 @@ import pyarrow as pa
 # ===================== CONFIG ========================
 PROJECT_ID = "ghanadbashi"   # جایگذاری با پروژه شما
 DATASET = "seo_reports"     # dataset شما
-TABLE = "ghanadbashi.seo_reports.00_02__ghanadbashi__gsc__raw_domain_data_webtype_fullfetch_null_safe_cast"         # جدول هدف
+TABLE = "00_02__ghanadbashi__gsc__raw_domain_data_webtype_fullfetch_null_safe_cast"         # جدول هدف
 OUTPUT_FILE = "/home/master_sniper724/gsc_weekly_summary_full.parquet"
 CHUNK_SIZE = 10000           # تعداد ردیف در هر batch
 
