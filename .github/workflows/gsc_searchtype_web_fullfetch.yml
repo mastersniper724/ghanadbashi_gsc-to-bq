@@ -101,3 +101,10 @@ jobs:
             $DEBUG_FLAG \
             --start-date "$START_DATE" \
             --end-date "$END_DATE" \
+
+      - name: Upload CSV test output
+        if: ${{ github.event.inputs.debug == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc_fullfetch_test_csv_rev02
+          path: gsc_fullfetch_test_rev02_*.csv
