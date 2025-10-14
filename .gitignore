@@ -26,3 +26,7 @@ venv/
 
 # Local Raw Data Folder
 /data/raw/othertypes/
+/data/processed/
+
+# Paraquet databases
+*.duckdb
