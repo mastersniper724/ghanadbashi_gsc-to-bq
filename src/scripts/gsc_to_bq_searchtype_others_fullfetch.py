@@ -617,12 +617,16 @@ def main():
         try:
             parts = []
             if 'df_new' in locals() and not df_new.empty:
+                df_new = robust_map_country_column(df_new, "Country", COUNTRY_MAP)
                 parts.append(df_new)
             if 'df_noindex' in locals() and not df_noindex.empty:
+                df_noindex = robust_map_country_column(df_noindex, "Country", COUNTRY_MAP)
                 parts.append(df_noindex)
             if 'df_batch4' in locals() and not df_batch4.empty:
+                df_batch4 = robust_map_country_column(df_batch4, "Country", COUNTRY_MAP)
                 parts.append(df_batch4)
             if 'df_site' in locals() and not df_site.empty:
+                df_site = robust_map_country_column(df_site, "Country", COUNTRY_MAP)
                 parts.append(df_site)
             if parts:
                 df_combined = pd.concat(parts, ignore_index=True)
