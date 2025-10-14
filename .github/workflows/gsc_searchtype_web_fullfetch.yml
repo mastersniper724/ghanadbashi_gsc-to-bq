@@ -101,6 +101,7 @@ jobs:
             $DEBUG_FLAG \
             --start-date "$START_DATE" \
             --end-date "$END_DATE" \
+            --csv-test "${CSV_TEST_FILE}"
 
       - name: Upload CSV test output
         if: ${{ github.event.inputs.debug == 'true' }}
