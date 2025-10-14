@@ -25,7 +25,7 @@ from utils.gsc_country_utils import load_country_map, robust_map_country_column
 SITE_URL = "sc-domain:ghanadbashi.com"
 BQ_PROJECT = "ghanadbashi"
 BQ_DATASET = "seo_reports"
-BQ_TABLE = "00_03__temp_ghanadbashi__gsc__raw_domain_data_othersearchtype_fullfetch"
+BQ_TABLE = "00_03__temp3_ghanadbashi__gsc__raw_domain_data_othersearchtype_fullfetch"
 ROW_LIMIT = 25000
 RETRY_DELAY = 60  # seconds
 SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE", "gcp-key.json")
