@@ -20,3 +20,6 @@ venv/
 
 # System
 .DS_Store
+
+# Local Test Pythons Folder
+/src/local_test/
