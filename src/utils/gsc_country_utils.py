@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 # File: gsc_country_utils.py
-# Revision: Rev.0 - Adding Kosovo country
+# Revision: Rev.1 - Adding Kosovo country
 # Purpose: Converting ISO 3166 Alpha-2 / Alpha-3 Codes or names
 #          to full Country Name using BigQuery reference table.
 # ============================================================
@@ -44,61 +44,31 @@ def map_country_column(df: pd.DataFrame, country_col: str, country_map: dict, ne
 # =================================================
 # Function: robust_map_country_column
 # =================================================
-def robust_map_country_column(df: pd.DataFrame, country_col: str, country_map: dict, new_col: str = "Country") -> pd.DataFrame:
+def robust_map_country_column(
+    df: pd.DataFrame, 
+    country_col: str, 
+    country_map: dict, 
+    new_col: str = "Country"
+) -> pd.DataFrame:
     """
-    Robust mapping: handles
-      - 2-letter codes (alpha-2),
-      - 3-letter codes (alpha-3),
-      - sometimes full names (with fuzzy fallback).
-    Writes result into `new_col` (replaces or creates column).
+    Robust mapping for GSC country values:
+      - Handles both Alpha-2 and Alpha-3 codes directly from the map
+      - Handles 'zzz', 'zz', or 'unknown' as 'Unknown Region'
+      - Handles 'XKK' as Kosovo
+      - Non-mapped values return None
     """
+    if df is None or df.empty or country_map is None:
+        return df
+
     def map_one(val):
         if pd.isna(val):
             return None
-        s = str(val).strip()
-        if s == "":
-            return None
+        s = str(val).strip().upper()
+        if s in ("", "ZZ", "ZZZ", "UNKNOWN"):
+            return "Unknown Region"
+        if s == "XKK":
+            return "Kosovo"
+        return country_map.get(s, "__NO_COUNTRY__")
 
-        # try uppercase alpha-2 directly (most common expected)
-        s_up = s.upper()
-        if s_up in country_map:
-            return country_map[s_up]
-
-        # try alpha-3 -> alpha-2
-        if len(s_up) == 3:
-            try:
-                c = pycountry.countries.get(alpha_3=s_up)
-                if c:
-                    code2 = c.alpha_2.upper()
-                    if code2 in country_map:
-                        return country_map[code2]
-            except Exception:
-                pass
-
-        # try if given is alpha-2 but lowercase or miss-cased (already handled by s_up)
-        # try direct lookup by name
-        try:
-            c = pycountry.countries.get(name=s)
-            if c:
-                code2 = c.alpha_2.upper()
-                if code2 in country_map:
-                    return country_map[code2]
-        except Exception:
-            pass
-
-        # try fuzzy search (may raise; catch and ignore)
-        try:
-            res = pycountry.countries.search_fuzzy(s)
-            if res:
-                code2 = res[0].alpha_2.upper()
-                if code2 in country_map:
-                    return country_map[code2]
-        except Exception:
-            pass
-
-        # not found
-        return "__NO_COUNTRY__"
-
-    # apply mapping
     df[new_col] = df[country_col].apply(map_one)
     return df
