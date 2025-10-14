@@ -10,3 +10,4 @@ tqdm
 pyarrow
 db-dtypes
 openpyxl
+tabulate
