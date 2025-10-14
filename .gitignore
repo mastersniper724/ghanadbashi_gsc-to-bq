@@ -23,3 +23,6 @@ venv/
 
 # Local Test Pythons Folder
 /src/local_test/
+
+# Local Raw Data Folder
+/data/raw/othertypes/
