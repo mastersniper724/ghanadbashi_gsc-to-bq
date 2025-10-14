@@ -26,6 +26,7 @@ venv/
 
 # Local Raw Data Folder
 /data/raw/othertypes/
+/data/raw/gsc_csv_exports/
 /data/processed/
 
 # Paraquet databases
