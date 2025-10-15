@@ -95,6 +95,7 @@ def ensure_table(table_name=BQ_TABLE_RAW):
                 bigquery.SchemaField("Impressions", "INTEGER"),
                 bigquery.SchemaField("CTR", "FLOAT"),
                 bigquery.SchemaField("Position", "FLOAT"),
+                bigquery.SchemaField("SearchType", "STRING"),
                 bigquery.SchemaField("fetch_date", "DATE"),
                 bigquery.SchemaField("fetch_id", "STRING"),
                 bigquery.SchemaField("unique_key", "STRING"),
@@ -103,7 +104,6 @@ def ensure_table(table_name=BQ_TABLE_RAW):
             schema = [
                 bigquery.SchemaField("Date", "DATE"),
                 bigquery.SchemaField("SearchAppearance", "STRING"),
-                bigquery.SchemaField("SearchType", "STRING"),
                 bigquery.SchemaField("TargetEntity", "STRING"),
                 bigquery.SchemaField("AllocationMethod", "STRING"),
                 bigquery.SchemaField("AllocationWeight", "FLOAT"),
@@ -111,6 +111,7 @@ def ensure_table(table_name=BQ_TABLE_RAW):
                 bigquery.SchemaField("Impressions_alloc", "FLOAT"),
                 bigquery.SchemaField("CTR_alloc", "FLOAT"),
                 bigquery.SchemaField("Position_alloc", "FLOAT"),
+                bigquery.SchemaField("SearchType", "STRING"),
                 bigquery.SchemaField("fetch_id", "STRING"),
                 bigquery.SchemaField("unique_key", "STRING"),
             ]
