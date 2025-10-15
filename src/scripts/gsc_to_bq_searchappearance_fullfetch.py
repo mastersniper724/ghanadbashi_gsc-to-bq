@@ -154,7 +154,7 @@ def fetch_searchappearance_data(start_date, end_date):
     batch_reports = {}
 
     # default SearchTypes for GSC
-    search_types = ["web", "image", "video"]
+    search_types = ["web", "image", "video" "news"]
 
     for i in range((end_dt - start_dt).days + 1):
         cur_date = start_dt + timedelta(days=i)
@@ -293,20 +293,45 @@ def upload_to_bq(df, table_name):
 # =================================================
 def direct_allocation(df_raw, mapping_df):
     if df_raw is None or df_raw.empty:
-        return pd.DataFrame(columns=['Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight','Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key'])
+        return pd.DataFrame(columns=[
+            'Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight',
+            'Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key'
+        ])
     
-    df = df_raw.merge(mapping_df.rename(columns={'Enhancement_Name':'TargetEntity'}), on='SearchAppearance', how='left')
+    # Merge with mapping table
+    df = df_raw.merge(
+        mapping_df.rename(columns={'Enhancement_Name': 'TargetEntity'}),
+        on='SearchAppearance',
+        how='left'
+    )
+    
+    # Replace missing mappings with placeholder
+    df['TargetEntity'] = df['TargetEntity'].fillna('__NO_SNIPPET__')
+
+    # Allocation logic
     df['AllocationMethod'] = 'direct'
     df['AllocationWeight'] = 1.0
     df['Clicks_alloc'] = df['Clicks'] * df['AllocationWeight']
     df['Impressions_alloc'] = df['Impressions'] * df['AllocationWeight']
-    df['CTR_alloc'] = df['Clicks_alloc']/df['Impressions_alloc'].replace(0,1)
+    df['CTR_alloc'] = df['Clicks_alloc'] / df['Impressions_alloc'].replace(0, 1)
     df['Position_alloc'] = df['Position']
 
-    df['unique_key'] = df.apply(lambda r: hashlib.sha256(f"{r['SearchAppearance']}|{r['TargetEntity']}|{r['fetch_id']}".encode()).hexdigest(), axis=1)
+    # unique_key شامل SearchAppearance + TargetEntity + Date + fetch_id
+    df['unique_key'] = df.apply(
+        lambda r: hashlib.sha256(
+            f"{r['SearchAppearance']}|{r['TargetEntity']}|{r['Date']}|{r['fetch_id']}".encode()
+        ).hexdigest(),
+        axis=1
+    )
 
-    df_alloc = df[['Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight','Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key']]
+    df_alloc = df[[
+        'Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight',
+        'Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key'
+    ]].copy()
+
+    # حذف ردیف‌های تکراری دقیق بر اساس unique_key
     df_alloc.drop_duplicates(subset=['unique_key'], inplace=True)
+    
     return df_alloc
 
 # =================================================
