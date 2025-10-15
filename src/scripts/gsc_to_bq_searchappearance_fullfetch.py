@@ -1,6 +1,6 @@
 # =================================================
 # FILE: gsc_to_bq_searchappearance_fullfetch.py
-# REV: 6.5.18
+# REV: 6.5.19
 # PURPOSE: Full fetch SearchAppearance data from GSC to BigQuery
 #          - Per-day & per-SearchType fetch
 #          - Date column added (snapshot date per row)
