@@ -306,6 +306,7 @@ def direct_allocation(df_raw, mapping_df):
     )
     
     # Replace missing mappings with placeholder
+    df = df.copy()
     df['TargetEntity'] = df['TargetEntity'].fillna('__NO_SNIPPET__')
 
     # Allocation logic
