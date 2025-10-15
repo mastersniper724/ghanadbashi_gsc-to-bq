@@ -291,8 +291,13 @@ def upload_to_bq(df, table_name):
 # =================================================
 # BLOCK 7: ALLOCATION (Direct allocation)
 # =================================================
+
 def direct_allocation(df_raw, mapping_df):
     import itertools
+    print("🧩 DEBUG >> unique SearchTypes in raw:", df_raw['SearchType'].unique())
+    print("🧩 DEBUG >> total rows in raw:", len(df_raw))
+    print("🧩 DEBUG >> total rows per SearchType:\n", df_raw['SearchType'].value_counts())
+
 
     if df_raw is None or df_raw.empty:
         return pd.DataFrame(columns=[
