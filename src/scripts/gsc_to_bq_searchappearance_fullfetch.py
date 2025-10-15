@@ -108,6 +108,7 @@ def ensure_table(table_name=BQ_TABLE_RAW):
             ]
         else:  # Allocated table
             schema = [
+                bigquery.SchemaField("Date", "DATE"),       # NEW: snapshot date (used in unique_key)
                 bigquery.SchemaField("SearchAppearance", "STRING"),
                 bigquery.SchemaField("TargetEntity", "STRING"),
                 bigquery.SchemaField("AllocationMethod", "STRING"),
