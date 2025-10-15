@@ -325,10 +325,6 @@ def direct_allocation(df_raw, mapping_df):
         axis=1
     )
 
-    # اضافه کردن دیباگ برای بررسی تفاوت قبل از حذف تکراری‌ها
-    print("🧩 DEBUG >> sample TargetEntity by SearchType:")
-    print(df.groupby('SearchType')['TargetEntity'].unique())
-
     df_alloc = df[[
         'Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight',
         'Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key'
