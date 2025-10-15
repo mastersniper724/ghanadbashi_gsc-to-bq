@@ -28,8 +28,8 @@ import uuid
 SITE_URL = "sc-domain:ghanadbashi.com"
 BQ_PROJECT = 'ghanadbashi'
 BQ_DATASET = 'seo_reports'
-BQ_TABLE_RAW = 'ghanadbashi__gsc__raw_domain_data_searchappearance'
-BQ_TABLE_ALLOC = 'ghanadbashi__gsc__allocated_searchappearance'
+BQ_TABLE_RAW = 'ghanadbashi__temp_gsc__raw_domain_data_searchappearance'
+BQ_TABLE_ALLOC = 'ghanadbashi__temp_gsc__allocated_searchappearance'
 ROW_LIMIT = 25000
 RETRY_DELAY = 60  # seconds in case of timeout
 
