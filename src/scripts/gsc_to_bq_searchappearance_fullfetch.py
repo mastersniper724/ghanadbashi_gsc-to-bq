@@ -364,6 +364,9 @@ def direct_allocation(df_raw, mapping_df):
         df_placeholder = pd.DataFrame(placeholder_rows)
         df_alloc = pd.concat([df_alloc, df_placeholder], ignore_index=True)
 
+    print("🧩 DEBUG >> sample TargetEntity by SearchType:")
+    print(df.groupby('SearchType')['TargetEntity'].unique())
+
     # حذف ردیف‌های تکراری
     df_alloc.drop_duplicates(subset=['unique_key'], inplace=True)
 
