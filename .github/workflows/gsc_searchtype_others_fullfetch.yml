@@ -112,5 +112,5 @@ jobs:
         if: ${{ github.event.inputs.debug == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: gsc_fullfetch_test_csv_rev02
+          name: gsc_othersearchtype_fullfetch
           path: gsc_fullfetch_test_rev02_*.csv
