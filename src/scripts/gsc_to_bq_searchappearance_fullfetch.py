@@ -90,7 +90,6 @@ def ensure_table(table_name=BQ_TABLE_RAW):
             schema = [
                 bigquery.SchemaField("Date", "DATE"),
                 bigquery.SchemaField("SearchAppearance", "STRING"),
-                bigquery.SchemaField("SearchType", "STRING"),
                 bigquery.SchemaField("Clicks", "INTEGER"),
                 bigquery.SchemaField("Impressions", "INTEGER"),
                 bigquery.SchemaField("CTR", "FLOAT"),
