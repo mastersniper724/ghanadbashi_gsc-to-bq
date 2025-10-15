@@ -71,16 +71,43 @@ jobs:
       - name: Validate gcp-key.json
         run: python -c "import json; json.load(open('gcp-key.json'))"
         
-      - name: Run Daily Snapshot Python (Delay Aware)
+      - name: Run Search Appearance FullFetch Python
         env:
           GOOGLE_APPLICATION_CREDENTIALS: gcp-key.json
+          PYTHONPATH: src
         shell: bash
         run: |
-          # GSC always lags 4 days behind (the Onlay last available Google data date)
-          TARGET_DATE=$(date -u -d "4 days ago" +"%Y-%m-%d")
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # Scheduled daily snapshot (4 days behind)
+            TARGET_DATE=$(date -u -d "4 days ago" +"%Y-%m-%d")
+            START_DATE="$TARGET_DATE"
+            END_DATE="$TARGET_DATE"
+            DEBUG_FLAG=""
+          else
+            # Manual run (workflow_dispatch)
+            if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+              DEBUG_FLAG="--debug"
+            else
+              DEBUG_FLAG=""
+            fi
+            START_DATE="${{ github.event.inputs.start_date }}"
+            END_DATE="${{ github.event.inputs.end_date }}"
+          fi
 
-          echo "📅 Fetching Search Appearance data for $TARGET_DATE"
+          echo "📅 Fetching Search Appearance data from $START_DATE to $END_DATE"
+
+          CSV_TEST_FILE="gsc_fullfetch_test_rev02_${{ github.run_id }}.csv"
 
           python src/scripts/gsc_to_bq_searchappearance_fullfetch.py \
-            --start-date "$TARGET_DATE" \
-            --end-date "$TARGET_DATE"
+            $DEBUG_FLAG \
+            --start-date "$START_DATE" \
+            --end-date "$END_DATE" \
+            --csv-test "${CSV_TEST_FILE}"
+
+
+      - name: Upload CSV test output
+        if: ${{ github.event.inputs.debug == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc_searchappearance_fullfetch
+          path: gsc_searchappearance_fullfetch_test_rev02_*.csv            
