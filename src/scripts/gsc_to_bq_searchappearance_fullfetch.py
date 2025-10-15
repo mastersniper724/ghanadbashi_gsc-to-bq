@@ -154,7 +154,7 @@ def fetch_searchappearance_data(start_date, end_date):
     batch_reports = {}
 
     # default SearchTypes for GSC
-    search_types = ["web", "image", "video" "news"]
+    search_types = ["web", "image", "video", "news"]
 
     for i in range((end_dt - start_dt).days + 1):
         cur_date = start_dt + timedelta(days=i)
