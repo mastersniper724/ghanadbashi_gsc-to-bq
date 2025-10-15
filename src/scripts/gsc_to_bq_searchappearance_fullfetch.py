@@ -291,85 +291,52 @@ def upload_to_bq(df, table_name):
 # =================================================
 # BLOCK 7: ALLOCATION (Direct allocation)
 # =================================================
-
 def direct_allocation(df_raw, mapping_df):
-    import itertools
-    print("🧩 DEBUG >> unique SearchTypes in raw:", df_raw['SearchType'].unique())
-    print("🧩 DEBUG >> total rows in raw:", len(df_raw))
-    print("🧩 DEBUG >> total rows per SearchType:\n", df_raw['SearchType'].value_counts())
-
-
     if df_raw is None or df_raw.empty:
         return pd.DataFrame(columns=[
             'Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight',
             'Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key'
         ])
     
-    # تمام تاریخ‌ها و SearchType‌های موجود در داده خام
-    all_dates = df_raw['Date'].unique().tolist()
-    all_searchtypes = df_raw['SearchType'].unique().tolist()
-
-    # تخصیص مستقیم واقعی
+    # Merge with mapping table
     df = df_raw.merge(
         mapping_df.rename(columns={'Enhancement_Name': 'TargetEntity'}),
         on='SearchAppearance',
         how='left'
     )
-    df['TargetEntity'] = df['TargetEntity'].fillna('__NO_SNIPPET__')
 
+    # Replace missing mappings with placeholder
+    df = df.copy()
+    df['TargetEntity'] = df['TargetEntity'].fillna('__NO_SNIPPET__')
+    
+    # Allocation logic
     df['AllocationMethod'] = 'direct'
     df['AllocationWeight'] = 1.0
-    df['Clicks_alloc'] = df['Clicks']
-    df['Impressions_alloc'] = df['Impressions']
+    df['Clicks_alloc'] = df['Clicks'] * df['AllocationWeight']
+    df['Impressions_alloc'] = df['Impressions'] * df['AllocationWeight']
     df['CTR_alloc'] = df['Clicks_alloc'] / df['Impressions_alloc'].replace(0, 1)
     df['Position_alloc'] = df['Position']
 
-    # unique_key
+    # ✅ unique_key شامل SearchAppearance + TargetEntity + Date + SearchType + fetch_id
     df['unique_key'] = df.apply(
         lambda r: hashlib.sha256(
-            f"{r['SearchAppearance']}|{r['TargetEntity']}|{r['Date']}|{r['fetch_id']}".encode()
+            f"{r['SearchAppearance']}|{r['TargetEntity']}|{r['Date']}|{r['SearchType']}|{r['fetch_id']}".encode()
         ).hexdigest(),
         axis=1
     )
+
+    # اضافه کردن دیباگ برای بررسی تفاوت قبل از حذف تکراری‌ها
+    print("🧩 DEBUG >> sample TargetEntity by SearchType:")
+    print(df.groupby('SearchType')['TargetEntity'].unique())
 
     df_alloc = df[[
         'Date','SearchAppearance','TargetEntity','AllocationMethod','AllocationWeight',
         'Clicks_alloc','Impressions_alloc','CTR_alloc','Position_alloc','SearchType','fetch_id','unique_key'
     ]].copy()
 
-    # ----------- اضافه کردن placeholder برای تاریخ‌ها و searchtype‌های بدون داده -----------
-    combos = list(itertools.product(all_dates, all_searchtypes))
-    existing = set(zip(df_alloc['Date'], df_alloc['SearchType']))
-
-    missing_combos = [c for c in combos if c not in existing]
-    if missing_combos:
-        placeholder_rows = []
-        for date, stype in missing_combos:
-            placeholder_rows.append({
-                'Date': date,
-                'SearchAppearance': '__NO_DATA__',
-                'TargetEntity': '__NO_SNIPPET__',
-                'AllocationMethod': 'direct',
-                'AllocationWeight': 0.0,
-                'Clicks_alloc': 0,
-                'Impressions_alloc': 0,
-                'CTR_alloc': 0,
-                'Position_alloc': 0,
-                'SearchType': stype,
-                'fetch_id': df_raw['fetch_id'].iloc[0],
-                'unique_key': hashlib.sha256(
-                    f"__NO_DATA__|__NO_SNIPPET__|{date}|{stype}|{df_raw['fetch_id'].iloc[0]}".encode()
-                ).hexdigest()
-            })
-        df_placeholder = pd.DataFrame(placeholder_rows)
-        df_alloc = pd.concat([df_alloc, df_placeholder], ignore_index=True)
-
-    print("🧩 DEBUG >> sample TargetEntity by SearchType:")
-    print(df.groupby('SearchType')['TargetEntity'].unique())
-
-    # حذف ردیف‌های تکراری
-    df_alloc.drop_duplicates(subset=['unique_key'], inplace=True)
-
+    # ✅ فقط حذف ردیف‌های تکراری کامل، نه بر اساس unique_key
+    df_alloc.drop_duplicates(inplace=True)
+    
     return df_alloc
 
 
