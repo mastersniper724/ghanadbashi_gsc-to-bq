@@ -186,7 +186,9 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
     all_new_rows = []
     total_inserted = 0
 
-    DIMENSION_BATCHES = ["date", "query", "page", "country", "device"]
+    DIMENSION_BATCHES = [
+        ["date", "query", "page", "country", "device"],
+    ]
 
     total_fetched_overall = 0
     total_new_candidates_overall = 0
