@@ -357,37 +357,37 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
     return pd.DataFrame(noindex_rows), inserted
 
 # ---------- Batch 7: SITEWIDE (ISOLATED) ----------
-def fetch_sitewide_batch(start_date, end_date, existing_keys):
-    """
-    Sitewide: dimensions = ['date']
-    Inserts __SITE_TOTAL__ rows and placeholder dates for missing days.
-    existing_keys is passed in to prevent duplicates within the batch.
-    Implements Upsert logic: updates placeholders if real data exists.
-    """
-    print("[INFO] Running Batch 7: Sitewide ['date']...", flush=True)
-    service = get_gsc_service()
-    all_new_rows = []
-    total_new_count = 0
+#def fetch_sitewide_batch(start_date, end_date, existing_keys):
+#    """
+#    Sitewide: dimensions = ['date']
+#    Inserts __SITE_TOTAL__ rows and placeholder dates for missing days.
+#    existing_keys is passed in to prevent duplicates within the batch.
+#    Implements Upsert logic: updates placeholders if real data exists.
+#    """
+#    print("[INFO] Running Batch 7: Sitewide ['date']...", flush=True)
+#    service = get_gsc_service()
+#    all_new_rows = []
+#    total_new_count = 0
 
     # ---------- Step 0: load existing unique_keys from BigQuery ----------
-    def get_existing_sitewide_keys(start_date, end_date, project_id, dataset_id, table_name):
-        client = bigquery.Client()
-        full_table_id = f"{project_id}.{dataset_id}.{table_name}"
-        query = f"""
-            SELECT unique_key
-            FROM `{full_table_id}`
-            WHERE Date BETWEEN '{start_date}' AND '{end_date}'
-              AND Query='__SITE_TOTAL__'
-              AND Page='__SITE_TOTAL__'
-        """
-        query_job = client.query(query)
-        result = query_job.result()
-        return set(row.unique_key for row in result)
+#    def get_existing_sitewide_keys(start_date, end_date, project_id, dataset_id, table_name):
+#        client = bigquery.Client()
+#        full_table_id = f"{project_id}.{dataset_id}.{table_name}"
+#        query = f"""
+#            SELECT unique_key
+#            FROM `{full_table_id}`
+#            WHERE Date BETWEEN '{start_date}' AND '{end_date}'
+#              AND Query='__SITE_TOTAL__'
+#              AND Page='__SITE_TOTAL__'
+#        """
+#        query_job = client.query(query)
+#        result = query_job.result()
+#        return set(row.unique_key for row in result)
 
     # ======= نحوه فراخوانی =======
     # توجه: BQ_TABLE باید مقداردهی شده باشد به full table id یا اگر در بالای فایل تعریف کرده‌ای:
     # BQ_TABLE = "ghanadbashi.seo_reports.ghanadbashi__gsc__raw_domain_data_fullfetch"
-    existing_bq_keys = get_existing_sitewide_keys(START_DATE, END_DATE, BQ_PROJECT, BQ_DATASET, BQ_TABLE)
+#    existing_bq_keys = get_existing_sitewide_keys(START_DATE, END_DATE, BQ_PROJECT, BQ_DATASET, BQ_TABLE)
 
     # ---------- Step 1: fetch actual GSC rows for ['date'] ----------
 #    start_row = 0
@@ -518,7 +518,7 @@ def main():
 
 
     # --- run isolated sitewide batch ---
-    df_site, inserted_site = fetch_sitewide_batch(START_DATE, END_DATE, existing_keys)
+#    df_site, inserted_site = fetch_sitewide_batch(START_DATE, END_DATE, existing_keys)
 
 #    total_all_inserted = inserted_main + inserted_noindex + inserted_b4 + inserted_site
     total_all_inserted = inserted_main + inserted_noindex
