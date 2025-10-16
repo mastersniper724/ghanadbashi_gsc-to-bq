@@ -1,6 +1,6 @@
 # ============================================================
-# File: gsc_searchtype_web_fullfetch__base_layer.yml
-# Python : gsc_to_bq_searchtype_web_fullfetch__base_layer.py (Rev.06)
+# File: gsc_searchtype_web_fullfetch.yml
+# Python : gsc_to_bq_searchtype_web_fullfetch.py (Rev.06)
 # Revision: Rev.01
 # Purpose: As Google's complete and full available data is just for official 4 days before
 #          fetch time, so to avoid void data and dates, the END_DATE should be fixed to 4 days ago and
@@ -8,12 +8,12 @@
 #          data boundary ending to 4 days back.
 # ============================================================
 
-name: GSC Base Layer Fullfetch (Web Type only) to BigQuery (7 Days)
+name: GSC Fullfetch (Web Type only) to BigQuery (7 Days)
 
 on:
-#  schedule:
+  schedule:
     # GitHub Actions uses UTC → 01:00 UTC = 04:30 Tehran time
-#    - cron: '00 01 * * *'
+    - cron: '00 01 * * *'
   workflow_dispatch:
     inputs:
       start_date:
@@ -97,7 +97,7 @@ jobs:
 
           CSV_TEST_FILE="gsc_fullfetch_test_rev02_${{ github.run_id }}.csv"
 
-          python src/scripts/gsc_to_bq_searchtype_web_fullfetch__base_layer.py \
+          python src/scripts/gsc_to_bq_searchtype_web_fullfetch.py \
             $DEBUG_FLAG \
             --start-date "$START_DATE" \
             --end-date "$END_DATE" \
@@ -107,5 +107,5 @@ jobs:
         if: ${{ github.event.inputs.debug == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: gsc_webtype_fullfetch__base_layer
+          name: gsc_webtype_fullfetch_test_csv_rev02
           path: gsc_fullfetch_test_rev02_*.csv
