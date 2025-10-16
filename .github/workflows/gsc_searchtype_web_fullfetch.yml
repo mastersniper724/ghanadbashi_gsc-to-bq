@@ -8,10 +8,10 @@
 #          data boundary ending to 4 days back.
 # ============================================================
 
-name: GSC Bse Layer Fullfetch (Web Type only) to BigQuery (7 Days)
+name: GSC Base Layer Fullfetch (Web Type only) to BigQuery (7 Days)
 
 on:
-  schedule:
+#  schedule:
     # GitHub Actions uses UTC → 01:00 UTC = 04:30 Tehran time
 #    - cron: '00 01 * * *'
   workflow_dispatch:
