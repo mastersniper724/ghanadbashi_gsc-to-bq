@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-# File: gsc_to_bq_fullfetch.py
-# Revision: Rev1 — Converting ISO 3166 Alpha-2 Codes country values to full Country Name.
+# File: gsc_to_bq_searchtype_web_fullfetch.py
+# Revision: Rev.2 — Converting ISO 3166 Alpha-2 Codes country values to full Country Name.
 # Purpose: Full fetch from GSC -> BigQuery with duplicate prevention and sitewide total batch
 # ============================================================
 
@@ -97,19 +97,47 @@ def ensure_table():
         print(f"[INFO] Table {BQ_TABLE} created.", flush=True)
 
 # ---------- UNIQUE KEY ----------
-def generate_unique_key(row):
-    q = (row.get("Query") or "").strip().lower()
-    p = (row.get("Page") or "").strip().lower().rstrip("/")
-    c = (row.get("Country") or "").strip().lower()
-    d = (row.get("Device") or "").strip().lower()
-    date_raw = row.get("Date")
-    if isinstance(date_raw, str):
-        date = date_raw[:10]
-    elif isinstance(date_raw, datetime):
-        date = date_raw.strftime("%Y-%m-%d")
-    else:
-        date = str(date_raw)[:10]
-    key_str = "|".join([date, q, p, c, d])
+def generate_expanded_unique_key(row, dims):
+    """
+    Generate a unique SHA256 hash key based on the 'Duplicated in Expanded Dimension Space'.
+    
+    Parameters:
+    - row: dict-like object containing the row data (e.g., {'Date': ..., 'Query': ..., 'Page': ..., ...})
+    - dims: list of dimension names (strings) that define the uniqueness for this row
+            e.g., ['date', 'query', 'page', 'country', 'device']
+
+    Mechanism:
+    - Only the dimensions present in 'dims' are considered for uniqueness
+    - Missing or None values are normalized to empty string
+    - String values are stripped and lowercased
+    - Date values are converted to 'YYYY-MM-DD' string
+    - The concatenated string of all dimension values is hashed using SHA256
+    """
+    key_parts = []
+
+    for dim in dims:
+        dim_lower = dim.lower()
+        val = row.get(dim, "")
+        
+        # Normalize None to empty string
+        if val is None:
+            val = ""
+        # Handle date normalization
+        if dim_lower == "date":
+            if isinstance(val, str):
+                val = val[:10]
+            elif isinstance(val, datetime):
+                val = val.strftime("%Y-%m-%d")
+            else:
+                val = str(val)[:10]
+        else:
+            val = str(val).strip().lower()
+            if dim_lower == "page":
+                val = val.rstrip("/")  # normalize URL
+
+        key_parts.append(val)
+
+    key_str = "|".join(key_parts)
     return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
 
 # ---------- GET EXISTING KEYS ----------
@@ -177,6 +205,7 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
     total_inserted = 0
 
     DIMENSION_BATCHES = [
+        ["date", "query", "page", "country", "device"],
         ["date", "query", "page"],
         ["date", "query", "country"],
         ["date", "query", "device"],
@@ -237,7 +266,7 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                     "SearchType": "web",
                 }
 
-                unique_key = generate_unique_key(row)
+                unique_key = generate_expanded_unique_key(row, dims)
                 if unique_key not in existing_keys:
                     existing_keys.add(unique_key)
                     row["unique_key"] = unique_key
@@ -336,7 +365,8 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
                         "Position": r.get("position", 0.0),
                         "SearchType": "web",
                     }
-                    row["unique_key"] = generate_unique_key(row)
+                    dims_for_batch = ["page"]
+                    row["unique_key"] = generate_expanded_unique_key(row, dims_for_batch)
                     if row["unique_key"] not in existing_keys:
                         existing_keys.add(row["unique_key"])
                         noindex_rows.append(row)
@@ -431,7 +461,8 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                 "SearchType": "web",
             }
 
-            unique_key = generate_unique_key(row)
+            dims_for_batch = ["date"]
+            unique_key = generate_expanded_unique_key(row, dims_for_batch)
             row["unique_key"] = unique_key
 
             # ---------- Upsert logic ----------
@@ -480,7 +511,8 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                 "Position": 0,
                 "SearchType": "web",
             }
-            unique_key = generate_unique_key(placeholder_row)
+            dims_for_batch = ["date"]
+            unique_key = generate_expanded_unique_key(placeholder_row, dims_for_batch)
             placeholder_row["unique_key"] = unique_key
 
             if unique_key not in existing_bq_keys and unique_key not in existing_keys:
@@ -555,7 +587,8 @@ def main():
                         "Position": r.get("position", 0.0),
                         "SearchType": "web",
                     }
-                    unique_key = generate_unique_key(row)
+                    dims_for_batch = ["date", "page"]
+                    unique_key = generate_expanded_unique_key(row, dims_for_batch)
                     if unique_key not in existing_keys:
                         existing_keys.add(unique_key)
                         row["unique_key"] = unique_key
