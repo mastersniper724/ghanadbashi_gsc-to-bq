@@ -642,28 +642,35 @@ def main():
             fetched_total += len(rows)
             for r in rows:
                 keys = r.get("keys", [])
-                if len(keys) == 2 and keys[1]:  # فقط صفحات non-null
-                    row = {
-                        "Date": keys[0],
-                        "Query": "__PAGE_TOTAL__",
-                        "Page": keys[1],
-                        "Country": "__NO_COUNTRY__",
-                        "Device": "__NO_DEVICE__",
-                        "SearchAppearance": "__NO_APPEARANCE__",
-                        "Clicks": r.get("clicks", 0),
-                        "Impressions": r.get("impressions", 0),
-                        "CTR": r.get("ctr", 0.0),
-                        "Position": r.get("position", 0.0),
-                        "SearchType": "web",
-                    }
+                date = keys[0] if len(keys) > 0 else None
 
-                    # استفاده از تابع جدید unified
-                    unique_key = generate_expanded_unique_key(row, dims_for_batch)
-                    if unique_key not in existing_keys:
-                        existing_keys.add(unique_key)
-                        row["unique_key"] = unique_key
-                        all_rows.append(row)
-                        new_candidates += 1
+                # ✅ Normalize date to YYYY-MM-DD (prevent 00:00:00)
+                if isinstance(date, datetime):
+                    date = date.strftime("%Y-%m-%d")
+                elif isinstance(date, str):
+                    date = date[:10]
+
+                row = {
+                    "Date": date,
+                    "Query": "__PAGE_TOTAL__",
+                    "Page": keys[1] if len(keys) > 1 else "__NO_PAGE__",
+                    "Country": "__NO_COUNTRY__",
+                    "Device": "__NO_DEVICE__",
+                    "SearchAppearance": "__NO_APPEARANCE__",
+                    "Clicks": r.get("clicks", 0),
+                    "Impressions": r.get("impressions", 0),
+                    "CTR": r.get("ctr", 0.0),
+                    "Position": r.get("position", 0.0),
+                    "SearchType": "web",
+                }
+
+                # استفاده از تابع جدید unified
+                unique_key = generate_expanded_unique_key(row, dims_for_batch)
+                if unique_key not in existing_keys:
+                    existing_keys.add(unique_key)
+                    row["unique_key"] = unique_key
+                    all_rows.append(row)
+                    new_candidates += 1
 
             if len(rows) < ROW_LIMIT:
                 break
