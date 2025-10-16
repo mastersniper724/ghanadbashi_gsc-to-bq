@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 # File: gsc_to_bq_fullfetch__base_layer.py
-# Revision: Rev0 — Converting ISO 3166 Alpha-2 Codes country values to full Country Name.
+# Revision: Rev1 — Converting ISO 3166 Alpha-2 Codes country values to full Country Name.
 # Purpose: Full fetch from GSC -> BigQuery with duplicate prevention and sitewide total batch
 # ============================================================
 
@@ -138,9 +138,13 @@ def upload_to_bq(df):
     df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
 #    df["Date"] = pd.to_datetime(df["Date"])
     #رکوردهایی که ستون Date آنها قابل تبدیل نیست، باعث کرش نشوند
-    if df["Date"].isna().any():
-        print("[WARN] Some rows have invalid Date, dropping them.", flush=True)
-        df = df.dropna(subset=["Date"])
+#    if df["Date"].isna().any():
+#        print("[WARN] Some rows have invalid Date, dropping them.", flush=True)
+#        df = df.dropna(subset=["Date"])
+    invalid_dates = df[df["Date"].isna()]
+    if not invalid_dates.empty:
+        print("[WARN] sample invalid date rows:", invalid_dates.head(5).to_dict(orient="records"), flush=True)
+
 
     if DEBUG_MODE:
         print(f"[DEBUG] Debug mode ON: skipping insert of {len(df)} rows to BigQuery", flush=True)
@@ -216,26 +220,36 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
             fetched_total_for_batch += len(rows)
             batch_new = []
             for r in rows:
+                # ---------- robust keys mapping ----------
+                # dims may be a list like ["date","query"] or a single string "date" depending on DIMENSION_BATCHES
+                # normalize dims to list of lowercase names
                 keys = r.get("keys", [])
-                date = keys[0] if len(keys) > 0 else None
-                query = keys[1] if ("query" in dims and len(keys) > 1) else None
-                third = keys[2] if len(keys) > 2 else None
-                page = third if "page" in dims else None
-                country = third if "country" in dims else None
-                device = third if "device" in dims else None
+                if isinstance(dims, list):
+                    dims_list = [d.lower() for d in dims]
+                else:
+                    dims_list = [str(dims).lower()]
 
-                keys_dict = dict(zip(["Date","Query","Page","Country","Device"], keys))
+                # build a dict mapping dimension name -> value from keys (keys align left)
+                keys_dict = dict(zip(dims_list, keys))
+
+                # safe extraction with sensible fallbacks
+                date_val = keys_dict.get("date") or start_date  # use requested date if API omitted it
+                query_val = keys_dict.get("query") or None
+                page_val = keys_dict.get("page") or None
+                country_val = keys_dict.get("country") or None
+                device_val = keys_dict.get("device") or None
+
                 row = {
-                    "Date": keys_dict.get("Date"),
-                    "Query": keys_dict.get("Query"),
-                    "Page": keys_dict.get("Page"),
-                    "Country": keys_dict.get("Country"),
-                    "Device": keys_dict.get("Device"),
+                    "Date": date_val,
+                    "Query": query_val,
+                    "Page": page_val,
+                    "Country": country_val,
+                    "Device": device_val,
                     "SearchAppearance": None,
-                    "Clicks": r.get("clicks",0),
-                    "Impressions": r.get("impressions",0),
-                    "CTR": r.get("ctr",0.0),
-                    "Position": r.get("position",0.0),
+                    "Clicks": r.get("clicks", 0),
+                    "Impressions": r.get("impressions", 0),
+                    "CTR": r.get("ctr", 0.0),
+                    "Position": r.get("position", 0.0),
                     "SearchType": "web",
                 }
 
@@ -250,6 +264,11 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
 
             if batch_new:
                 df_batch = pd.DataFrame(batch_new)
+
+                # For Debugingg - start
+                print(df_batch.head())  # نمایش ۵ رکورد اول
+                print("Batch size:", len(df_batch))  # تعداد کل رکوردهای آماده
+                # For Debugingg - End
 
                 # ---------- APPLY COUNTRY MAPPING FOR THIS BATCH (if applicable) ----------
                 # only attempt mapping for batches that requested the 'country' dimension
