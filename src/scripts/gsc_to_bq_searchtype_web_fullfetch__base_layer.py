@@ -135,7 +135,13 @@ def upload_to_bq(df):
     if df.empty:
         print("[INFO] No new rows to insert.", flush=True)
         return 0
-    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
+#    df["Date"] = pd.to_datetime(df["Date"])
+    #رکوردهایی که ستون Date آنها قابل تبدیل نیست، باعث کرش نشوند
+    if df["Date"].isna().any():
+        print("[WARN] Some rows have invalid Date, dropping them.", flush=True)
+        df = df.dropna(subset=["Date"])
+
     if DEBUG_MODE:
         print(f"[DEBUG] Debug mode ON: skipping insert of {len(df)} rows to BigQuery", flush=True)
         return len(df)
@@ -218,17 +224,18 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                 country = third if "country" in dims else None
                 device = third if "device" in dims else None
 
+                keys_dict = dict(zip(["Date","Query","Page","Country","Device"], keys))
                 row = {
-                    "Date": date,
-                    "Query": query,
-                    "Page": page,
-                    "Country": country,
-                    "Device": device,
-                    "SearchAppearance": None,  #Null
-                    "Clicks": r.get("clicks", 0),
-                    "Impressions": r.get("impressions", 0),
-                    "CTR": r.get("ctr", 0.0),
-                    "Position": r.get("position", 0.0),
+                    "Date": keys_dict.get("Date"),
+                    "Query": keys_dict.get("Query"),
+                    "Page": keys_dict.get("Page"),
+                    "Country": keys_dict.get("Country"),
+                    "Device": keys_dict.get("Device"),
+                    "SearchAppearance": None,
+                    "Clicks": r.get("clicks",0),
+                    "Impressions": r.get("impressions",0),
+                    "CTR": r.get("ctr",0.0),
+                    "Position": r.get("position",0.0),
                     "SearchType": "web",
                 }
 
