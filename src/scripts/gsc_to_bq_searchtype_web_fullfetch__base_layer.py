@@ -268,23 +268,23 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                 df_batch = pd.DataFrame(batch_new)
 
                 # ---------- APPLY COUNTRY MAPPING FOR THIS BATCH (if applicable) ----------
-                # only attempt mapping for batches that requested the 'country' dimension
                 if "country" in [d.lower() for d in dims]:
                     # find actual country column name in df_batch (case-insensitive)
                     country_col = next((c for c in df_batch.columns if c.lower() == "country"), None)
-                    if country_col:
-                        df_batch = robust_map_country_column(df_batch, country_col=country_col, country_map=COUNTRY_MAP, new_col="Country")
                     if country_col is None:
                         print(f"[DEBUG] Batch {i}: expected 'country' column but none found in columns. Skipping country mapping.", flush=True)
                     else:
-                        # quick samples to inspect incoming codes
-                        sample_vals = pd.Series(df_batch[country_col].astype(str)).dropna().unique()[:20]
-
                         # apply robust mapping (uses utils.robust_map_country_column)
-                        df_batch = robust_map_country_column(df_batch, country_col=country_col, country_map=COUNTRY_MAP, new_col="Country")
-                        # now show how many mapped / unmapped
+                        df_batch = robust_map_country_column(
+                            df_batch,
+                            country_col=country_col,
+                            country_map=COUNTRY_MAP,
+                            new_col="Country"
+                        )
+                        # optional: quick check
                         mapped_count = df_batch["Country"].notna().sum()
                         total_count = len(df_batch)
+                        print(f"[DEBUG] Batch {i}: Country mapping applied, {mapped_count}/{total_count} mapped.", flush=True)
 
                 # ---------- UPLOAD to BQ ----------
                 inserted = upload_to_bq(df_batch)
