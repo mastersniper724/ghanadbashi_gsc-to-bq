@@ -267,8 +267,11 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                 }
 
                 unique_key = generate_expanded_unique_key(row, dims)
+                # 1️⃣ تولید unique_key با مکانیزم جدید
+                row["unique_key"] = generate_expanded_unique_key(row, dims)
                 # ---------- DEBUG ----------
                 print(row["Query"], row["Page"], row["Country"], row["Device"], row["unique_key"])
+                
                 if unique_key not in existing_keys:
                     existing_keys.add(unique_key)
                     row["unique_key"] = unique_key
