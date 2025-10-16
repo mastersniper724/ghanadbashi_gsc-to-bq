@@ -113,11 +113,27 @@ def generate_expanded_unique_key(row, dims):
     - Date values are converted to 'YYYY-MM-DD' string
     - The concatenated string of all dimension values is hashed using SHA256
     """
+    # canonical mapping: lowercase dim -> actual column name in row dict
+    canonical = {
+        "date": "Date",
+        "query": "Query",
+        "page": "Page",
+        "country": "Country",
+        "device": "Device"
+    }   
     key_parts = []
 
     for dim in dims:
-        dim_lower = dim.lower()
-        val = row.get(dim, "")
+        dim_lower = str(dim).lower()
+        col = canonical.get(dim_lower, None)
+
+        # try several fallbacks to find the value in row
+        val = ""
+        if col and col in row:
+            val = row.get(col)
+        else:
+            # fallback attempts: original dim as-is, lowercase, uppercase
+            val = row.get(dim) if dim in row else row.get(dim_lower) if dim_lower in row else row.get(dim.upper(), None)
         
         # Normalize None to empty string
         if val is None:
@@ -129,15 +145,17 @@ def generate_expanded_unique_key(row, dims):
             elif isinstance(val, datetime):
                 val = val.strftime("%Y-%m-%d")
             else:
-                val = str(val)[:10]
+                val = str(val)[:10] if val != "" else ""
         else:
             val = str(val).strip().lower()
-            if dim_lower == "page":
-                val = val.rstrip("/")  # normalize URL
+            if dim_lower == "page" and val:
+                val = val.rstrip("/")  # normalize trailing slash
 
         key_parts.append(val)
 
     key_str = "|".join(key_parts)
+    # optional DEBUG: print the key parts (enable only while testing)
+    # print("DEBUG key_fields:", {d: row.get(canonical.get(d.lower(), d), "") for d in dims}, "-> unique:", hashlib.sha256(key_str.encode("utf-8")).hexdigest())
     return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
 
 # ---------- GET EXISTING KEYS ----------
