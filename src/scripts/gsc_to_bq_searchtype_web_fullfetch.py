@@ -318,8 +318,8 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
 
                 # ---------- DEBUG: print the actual values used to build the key ----------
                 # show a compact mapping so you can verify per-row which fields were used
-                debug_map = {d: row.get(d.capitalize() if d != 'query' else 'Query') for d in dims_list}
-                print("DEBUG key_fields:", debug_map, " -> unique_key:", unique_key, flush=True)
+#                debug_map = {d: row.get(d.capitalize() if d != 'query' else 'Query') for d in dims_list}
+#                print("DEBUG key_fields:", debug_map, " -> unique_key:", unique_key, flush=True)
 
                 # duplicate check
                 if unique_key not in existing_keys:
