@@ -265,11 +265,6 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
             if batch_new:
                 df_batch = pd.DataFrame(batch_new)
 
-                # For Debugingg - start
-                print(df_batch.head())  # نمایش ۵ رکورد اول
-                print("Batch size:", len(df_batch))  # تعداد کل رکوردهای آماده
-                # For Debugingg - End
-
                 # ---------- APPLY COUNTRY MAPPING FOR THIS BATCH (if applicable) ----------
                 # only attempt mapping for batches that requested the 'country' dimension
                 if "country" in [d.lower() for d in dims]:
