@@ -270,7 +270,8 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                 if "country" in [d.lower() for d in dims]:
                     # find actual country column name in df_batch (case-insensitive)
                     country_col = next((c for c in df_batch.columns if c.lower() == "country"), None)
-
+                    if country_col:
+                        df_batch = robust_map_country_column(df_batch, country_col=country_col, country_map=COUNTRY_MAP, new_col="Country")
                     if country_col is None:
                         print(f"[DEBUG] Batch {i}: expected 'country' column but none found in columns. Skipping country mapping.", flush=True)
                     else:
