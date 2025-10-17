@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 # File: gsc_to_bq_searchtype_web_fullfetch.py
-# Revision: Rev.2 — Converting ISO 3166 Alpha-2 Codes country values to full Country Name.
-# Purpose: Full fetch from GSC -> BigQuery with duplicate prevention and sitewide total batch
+# Revision: Rev.3 — Converting ISO 3166 Alpha-2 Codes country values to full Country Name.
+# Purpose: Full fetch + Base Layer from GSC -> BigQuery with Duplicated in Expanded Dimension Space Mechanism
 # ============================================================
 
 import os

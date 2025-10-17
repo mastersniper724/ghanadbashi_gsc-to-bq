@@ -26,9 +26,9 @@ on:
         description: 'Enable debug mode'
         required: false
         default: 'false'
-  schedule:
+#  schedule:
     # GitHub Actions uses UTC → 01:00 UTC = 04:30 Tehran time
-    - cron: '00 01 * * *'
+#    - cron: '00 01 * * *'
 
 concurrency:
   group: gsc-searchtype-others
