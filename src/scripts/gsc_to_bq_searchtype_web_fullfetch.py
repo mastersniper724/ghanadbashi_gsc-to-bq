@@ -27,7 +27,7 @@ BQ_TABLE = "00_06__temp_ghanadbashi__gsc__raw_domain_data_webtype_fullfetch"
 ROW_LIMIT = 25000
 RETRY_DELAY = 60  # seconds
 SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE", "gcp-key.json")
-
+ 
 # ---------- ARGUMENTS ----------
 parser = argparse.ArgumentParser(description="GSC to BigQuery Full Fetch (Rev6.6)")
 parser.add_argument("--start-date", required=True, help="Start date YYYY-MM-DD")
@@ -578,6 +578,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                 print(f"[INFO] Batch 8, Sitewide: adding placeholder for missing date {date_str}", flush=True)
 
     # ✅ درج یکجای placeholderها
+    placeholders_only = [row for row in all_new_rows if row.get("Clicks") is None]
     if placeholders_only:
         df_placeholders = pd.DataFrame(placeholders_only)
         inserted = upload_to_bq(df_placeholders)
@@ -614,8 +615,8 @@ def main():
         service = get_gsc_service()
         start_row = 0
         all_rows = []
-        fetched_total = 0
-        new_candidates = 0
+        fetched_b7 = 0
+        new_b7 = 0
 
         dims_for_batch = ["date", "page"]
 
@@ -639,7 +640,7 @@ def main():
             if not rows:
                 break
 
-            fetched_total += len(rows)
+            fetched_b7 += len(rows)
             for r in rows:
                 keys = r.get("keys", [])
                 date = keys[0] if len(keys) > 0 else None
@@ -650,27 +651,28 @@ def main():
                 elif isinstance(date, str):
                     date = date[:10]
 
-                row = {
-                    "Date": date,
-                    "Query": "__PAGE_TOTAL__",
-                    "Page": keys[1] if len(keys) > 1 else "__NO_PAGE__",
-                    "Country": "__NO_COUNTRY__",
-                    "Device": "__NO_DEVICE__",
-                    "SearchAppearance": "__NO_APPEARANCE__",
-                    "Clicks": r.get("clicks", 0),
-                    "Impressions": r.get("impressions", 0),
-                    "CTR": r.get("ctr", 0.0),
-                    "Position": r.get("position", 0.0),
-                    "SearchType": "web",
-                }
+                if len(keys) == 2 and keys[1]:  # only non-null pages
+                    row = {
+                        "Date": keys[0],
+                        "Query": "__PAGE_TOTAL__",
+                        "Page": keys[1] if len(keys) > 1 else "__NO_PAGE__",
+                        "Country": "__NO_COUNTRY__",
+                        "Device": "__NO_DEVICE__",
+                        "SearchAppearance": "__NO_APPEARANCE__",
+                        "Clicks": r.get("clicks", 0),
+                        "Impressions": r.get("impressions", 0),
+                        "CTR": r.get("ctr", 0.0),
+                        "Position": r.get("position", 0.0),
+                        "SearchType": "web",
+                    }
 
-                # استفاده از تابع جدید unified
-                unique_key = generate_expanded_unique_key(row, dims_for_batch)
-                if unique_key not in existing_keys:
-                    existing_keys.add(unique_key)
-                    row["unique_key"] = unique_key
-                    all_rows.append(row)
-                    new_candidates += 1
+                    # استفاده از تابع جدید unified
+                    unique_key = generate_expanded_unique_key(row, dims_for_batch)
+                    if unique_key not in existing_keys:
+                        existing_keys.add(unique_key)
+                        row["unique_key"] = unique_key
+                        all_rows.append(row)
+                        new_b7 += 1
 
             if len(rows) < ROW_LIMIT:
                 break
@@ -686,7 +688,7 @@ def main():
         else:
             print("[INFO] Batch 7: No non-null page rows found.", flush=True)
 
-        print(f"[INFO] Batch 7 summary: fetched_total={fetched_total}, new_candidates={new_candidates}, inserted={inserted_b7}", flush=True)
+        print(f"[INFO] Batch 7 summary: fetched_total={fetched_b7}, new_candidates={new_b7}, inserted={inserted_b7}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Failed to fetch Batch 7 (Date + Page): {e}", flush=True)

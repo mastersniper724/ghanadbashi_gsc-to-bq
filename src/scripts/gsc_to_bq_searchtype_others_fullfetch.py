@@ -25,7 +25,7 @@ from utils.gsc_country_utils import load_country_map, robust_map_country_column
 SITE_URL = "sc-domain:ghanadbashi.com"
 BQ_PROJECT = "ghanadbashi"
 BQ_DATASET = "seo_reports"
-BQ_TABLE = "00_03__temp_ghanadbashi__gsc__raw_domain_data_othersearchtype_fullfetch"
+BQ_TABLE = "00_03__temp_ghanadbashi__gsc__raw_domain_data_othersearchtype_fullfetch__base_layer"
 ROW_LIMIT = 25000
 RETRY_DELAY = 60  # seconds
 SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE", "gcp-key.json")
@@ -128,20 +128,67 @@ def ensure_table_and_schema():
         print(f"[INFO] Table {BQ_TABLE} created with SearchType field.", flush=True)
 
 # ---------- UNIQUE KEY ----------
-def generate_unique_key(row):
-    q = (row.get("Query") or "").strip().lower()
-    p = (row.get("Page") or "").strip().lower().rstrip("/")
-    c = (row.get("Country") or "").strip().lower()
-    d = (row.get("Device") or "").strip().lower()
-    date_raw = row.get("Date")
-    if isinstance(date_raw, str):
-        date = date_raw[:10]
-    elif isinstance(date_raw, datetime):
-        date = date_raw.strftime("%Y-%m-%d")
-    else:
-        date = str(date_raw)[:10]
-    key_str = "|".join([date, q, p, c, d])
+def generate_expanded_unique_key(row, dims):
+    """
+    Generate a unique SHA256 hash key based on the 'Duplicated in Expanded Dimension Space'.
+    
+    Parameters:
+    - row: dict-like object containing the row data (e.g., {'Date': ..., 'Query': ..., 'Page': ..., ...})
+    - dims: list of dimension names (strings) that define the uniqueness for this row
+            e.g., ['date', 'query', 'page', 'country', 'device']
+
+    Mechanism:
+    - Only the dimensions present in 'dims' are considered for uniqueness
+    - Missing or None values are normalized to empty string
+    - String values are stripped and lowercased
+    - Date values are converted to 'YYYY-MM-DD' string
+    - The concatenated string of all dimension values is hashed using SHA256
+    """
+    # canonical mapping: lowercase dim -> actual column name in row dict
+    canonical = {
+        "date": "Date",
+        "query": "Query",
+        "page": "Page",
+        "country": "Country",
+        "device": "Device"
+    }   
+    key_parts = []
+
+    for dim in dims:
+        dim_lower = str(dim).lower()
+        col = canonical.get(dim_lower, None)
+
+        # try several fallbacks to find the value in row
+        val = ""
+        if col and col in row:
+            val = row.get(col)
+        else:
+            # fallback attempts: original dim as-is, lowercase, uppercase
+            val = row.get(dim) if dim in row else row.get(dim_lower) if dim_lower in row else row.get(dim.upper(), None)
+        
+        # Normalize None to empty string
+        if val is None:
+            val = ""
+        # Handle date normalization
+        if dim_lower == "date":
+            if isinstance(val, str):
+                val = val[:10]
+            elif isinstance(val, datetime):
+                val = val.strftime("%Y-%m-%d")
+            else:
+                val = str(val)[:10] if val != "" else ""
+        else:
+            val = str(val).strip().lower()
+            if dim_lower == "page" and val:
+                val = val.rstrip("/")  # normalize trailing slash
+
+        key_parts.append(val)
+
+    key_str = "|".join(key_parts)
+    # optional DEBUG: print the key parts (enable only while testing)
+    # print("DEBUG key_fields:", {d: row.get(canonical.get(d.lower(), d), "") for d in dims}, "-> unique:", hashlib.sha256(key_str.encode("utf-8")).hexdigest())
     return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
+
 
 # ---------- GET EXISTING KEYS (LIMITED BY DATE RANGE) ----------
 def get_existing_keys(start_date, end_date):
@@ -211,6 +258,7 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
     total_inserted = 0
 
     DIMENSION_BATCHES = [
+        ["date", "query", "page", "country", "device"],
         ["date", "query", "page"],
         ["date", "query", "country"],
         ["date", "query", "device"],
@@ -257,22 +305,51 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                 page_index += 1
 
                 batch_new = []
+                # ---------- REPLACE the inner loop body with this (inside fetch_gsc_data) ----------
                 for r in rows:
-                    keys = r.get("keys", [])
-                    date = keys[0] if len(keys) > 0 else None
-                    query = keys[1] if ("query" in dims and len(keys) > 1) else None
-                    third = keys[2] if len(keys) > 2 else None
-                    page = third if "page" in dims else None
-                    country = third if "country" in dims else None
-                    device = third if "device" in dims else None
+                    # build dims_list normalized (lowercase names)
+                    if isinstance(dims, list):
+                        dims_list = [d.lower() for d in dims]
+                    else:
+                        dims_list = [str(dims).lower()]
 
+                    # map keys returned by GSC to dimension names (keys align left)
+                    # e.g., dims_list = ['date','query','page','country','device']
+                    keys = r.get("keys", [])
+                    keys_dict = dict(zip(dims_list, keys))
+
+                    # safe extraction: use keys_dict and normalize to expected capitalized column names
+                    date = keys_dict.get("date") or start_date
+                    query = keys_dict.get("query") or None
+                    page = keys_dict.get("page") or None
+                    country = keys_dict.get("country") or None
+                    device = keys_dict.get("device") or None
+
+                    # ensure placeholders for missing dims so unique-key sees consistent fields
+                    # (you can tweak placeholders if you prefer other tokens)
+                    if page is None or str(page).strip() == "":
+                        page_val = "__NO_PAGE__"
+                    else:
+                        page_val = str(page).strip()
+
+                    if country is None or str(country).strip() == "":
+                        country_val = "__NO_COUNTRY__"
+                    else:
+                        country_val = str(country).strip()
+
+                    if device is None or str(device).strip() == "":
+                        device_val = "__NO_DEVICE__"
+                    else:
+                        device_val = str(device).strip()
+
+                    # build row with same column names used elsewhere in pipeline
                     row = {
                         "Date": date,
-                        "Query": query,
-                        "Page": page,
-                        "Country": country,
-                        "Device": device,
-                        "SearchAppearance": "__NO_APPEARANCE__",  #Null
+                        "Query": query if query is not None else "",
+                        "Page": page_val,
+                        "Country": country_val,
+                        "Device": device_val,
+                        "SearchAppearance": "__NO_APPEARANCE__",
                         "Clicks": r.get("clicks", 0),
                         "Impressions": r.get("impressions", 0),
                         "CTR": r.get("ctr", 0.0),
@@ -280,13 +357,23 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
                         "SearchType": stype,
                     }
 
-                    unique_key = generate_unique_key(row)
+                    # generate unique key once using the dims list (pass dims_list so function knows which dims to use)
+                    unique_key = generate_expanded_unique_key(row, dims_list)
+
+                    # ---------- DEBUG: print the actual values used to build the key ----------
+                    # show a compact mapping so you can verify per-row which fields were used
+    #                debug_map = {d: row.get(d.capitalize() if d != 'query' else 'Query') for d in dims_list}
+    #                print("DEBUG key_fields:", debug_map, " -> unique_key:", unique_key, flush=True)
+
+                    # duplicate check
                     if unique_key not in existing_keys:
                         existing_keys.add(unique_key)
                         row["unique_key"] = unique_key
                         batch_new.append(row)
 
                 new_candidates_for_batch += len(batch_new)
+                print(f"[INFO] Batch {i} (page {page_index}): Fetched {len(rows)} rows, {len(batch_new)} new rows.", flush=True)
+                
                 if batch_new:
                     df_batch = pd.DataFrame(batch_new)
 
@@ -345,6 +432,8 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
     fetched_total = 0
     new_candidates = 0
 
+    dims_for_batch = ["date", "page"]  # ✅ مهم: هم‌راستا با dimensions درخواست API
+
     for stype in SEARCH_TYPES:
         start_row = 0
         while True:
@@ -352,7 +441,7 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
             request = {
                 "startDate": start_date,
                 "endDate": end_date,
-                "dimensions": ["date", "page"],
+                "dimensions": dims_for_batch,
                 "rowLimit": ROW_LIMIT,
                 "startRow": start_row,
                 "searchType": stype,
@@ -388,7 +477,10 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
                             "Position": r.get("position", 0.0),
                             "SearchType": stype,
                         }
-                        row["unique_key"] = generate_unique_key(row)
+
+                        # ✅ استفاده از مکانیزم جدید کلید یکتا در فضای ابعاد گسترش‌یافته
+                        row["unique_key"] = generate_expanded_unique_key(row, dims_for_batch)
+
                         if row["unique_key"] not in existing_keys:
                             existing_keys.add(row["unique_key"])
                             noindex_rows.append(row)
@@ -419,6 +511,28 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
     service = get_gsc_service()
     all_new_rows = []
     total_new_count = 0
+
+    # ---------- Step 0: load existing unique_keys from BigQuery ----------
+    def get_existing_sitewide_keys(start_date, end_date, project_id, dataset_id, table_name):
+        client = bigquery.Client()
+        full_table_id = f"{project_id}.{dataset_id}.{table_name}"
+        query = f"""
+            SELECT unique_key
+            FROM `{full_table_id}`
+            WHERE Date BETWEEN '{start_date}' AND '{end_date}'
+              AND Query='__SITE_TOTAL__'
+              AND Page='__SITE_TOTAL__'
+        """
+        query_job = client.query(query)
+        result = query_job.result()
+        return set(row.unique_key for row in result)
+
+    existing_bq_keys = get_existing_sitewide_keys(START_DATE, END_DATE, BQ_PROJECT, BQ_DATASET, BQ_TABLE)
+
+    # ---------- Step 1: fetch actual GSC rows for ['date'] ----------
+    dims_for_batch = ["date"]  # ✅ کلید اصلی ابعاد این Batch
+    start_row = 0
+    batch_index = 1
     fetched_total = 0
     new_candidates = 0
 
@@ -429,7 +543,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
             request = {
                 "startDate": start_date,
                 "endDate": end_date,
-                "dimensions": ["date"],
+                "dimensions": dims_for_batch,
                 "rowLimit": ROW_LIMIT,
                 "startRow": start_row,
                 "searchType": stype,
@@ -447,6 +561,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
 
             fetched_total += len(rows)
             batch_new = []
+
             for r in rows:
                 keys = r.get("keys", [])
                 date = keys[0] if len(keys) > 0 else None
@@ -465,25 +580,33 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                     "SearchType": stype,
                 }
 
-                unique_key = generate_unique_key(row)
-                if unique_key not in existing_keys:
-                    existing_keys.add(unique_key)
-                    row["unique_key"] = unique_key
+                # ✅ ایجاد کلید یکتا بر اساس ابعاد Batch
+                row["unique_key"] = generate_expanded_unique_key(row, dims_for_batch)
+
+                # ---------- Upsert logic ----------
+                if row["unique_key"] in existing_bq_keys:
+                    # در این نسخه فقط لاگ ثبت می‌کنیم؛ در آینده میشه UPDATE کرد
+                    print(f"[INFO] Row for {date} already exists → skip (update not implemented)", flush=True)
+                elif row["unique_key"] not in existing_keys:
+                    existing_keys.add(row["unique_key"])
                     batch_new.append(row)
                     new_candidates += 1
 
+            # ✅ آپلود گروهی رکوردهای جدید
             if batch_new:
                 df_batch = pd.DataFrame(batch_new)
                 inserted = upload_to_bq(df_batch)
                 total_new_count += inserted
                 all_new_rows.extend(batch_new)
 
+            batch_index += 1
             if len(rows) < ROW_LIMIT:
                 break
             start_row += len(rows)
 
     # Step 2: placeholders for missing dates (for each searchType)
     date_range = pd.date_range(start=start_date, end=end_date)
+    placeholders_only = []
     for dt in date_range:
         date_str = dt.strftime("%Y-%m-%d")
         # check if any row for that date exists in all_new_rows for any stype
@@ -503,18 +626,25 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
                     "Position": 0,
                     "SearchType": stype,
                 }
-                unique_key = generate_unique_key(placeholder_row)
-                if unique_key not in existing_keys:
-                    existing_keys.add(unique_key)
-                    placeholder_row["unique_key"] = unique_key
-                    all_new_rows.append(placeholder_row)
-                    print(f"[INFO] Batch 7, Sitewide: adding placeholder for missing date {date_str} (stype={stype})", flush=True)
 
+                # ✅ کلید یکتا برای placeholder هم با همان ابعاد
+                placeholder_row["unique_key"] = generate_expanded_unique_key(placeholder_row, dims_for_batch)
+
+                if (
+                    placeholder_row["unique_key"] not in existing_bq_keys
+                    and placeholder_row["unique_key"] not in existing_keys
+                ):
+                    existing_keys.add(placeholder_row["unique_key"])
+                    placeholders_only.append(placeholder_row)
+                    print(f"[INFO] Batch 8, Sitewide: adding placeholder for missing date {date_str}", flush=True)
+
+    # ✅ درج یکجای placeholderها
     placeholders_only = [row for row in all_new_rows if row.get("Clicks") is None]
     if placeholders_only:
         df_placeholders = pd.DataFrame(placeholders_only)
         inserted = upload_to_bq(df_placeholders)
         total_new_count += inserted
+        all_new_rows.extend(placeholders_only)
 
     print(f"[INFO] Batch 7, Sitewide done: fetched_total={fetched_total}, new_candidates={new_candidates}, inserted={total_new_count}", flush=True)
     return pd.DataFrame(all_new_rows), total_new_count
@@ -535,40 +665,57 @@ def main():
     df_noindex, inserted_noindex = fetch_noindex_batch(START_DATE, END_DATE, existing_keys)
 
     # ----------------------------
-    # B. Fetch Batch 6: Date + Page (Page IS NOT NULL)
+    # B. Fetch Batch 7: Date + Page (Page IS NOT NULL)
     # ----------------------------
-    print("[INFO] Fetching Batch 6 (Date + Page, excluding NULL pages)...", flush=True)
+    print("[INFO] Fetching Batch 7 (Date + Page, excluding NULL pages)...", flush=True)
     try:
         service = get_gsc_service()
         all_rows = []
-        fetched_b4 = 0
-        new_b4 = 0
+        fetched_b7 = 0
+        new_b7 = 0
+
+        dims_for_batch = ["date", "page"]
 
         for stype in SEARCH_TYPES:
             start_row = 0
             while True:
-                print(f"[INFO] Batch 6 fetch for stype={stype}, startRow={start_row}", flush=True)
+                print(f"[INFO] Batch 7 fetch for stype={stype}, startRow={start_row}", flush=True)
                 request = {
                     "startDate": START_DATE,
                     "endDate": END_DATE,
-                    "dimensions": ["date", "page"],
+                    "dimensions": dims_for_batch,
                     "rowLimit": ROW_LIMIT,
                     "startRow": start_row,
                     "searchType": stype,
                 }
-                resp = service.searchanalytics().query(siteUrl=SITE_URL, body=request).execute()
+
+                try:
+                    resp = service.searchanalytics().query(siteUrl=SITE_URL, body=request).execute()
+                except Exception as e:
+                    print(f"[ERROR] Batch 7 fetch error: {e}, retrying in {RETRY_DELAY} sec...", flush=True)
+                    time.sleep(RETRY_DELAY)
+                    continue
+
                 rows = resp.get("rows", [])
                 if not rows:
                     break
 
-                fetched_b4 += len(rows)
+                fetched_b7 += len(rows)
                 for r in rows:
                     keys = r.get("keys", [])
+                    date = keys[0] if len(keys) > 0 else None
+
+                    # ✅ Normalize date to YYYY-MM-DD (prevent 00:00:00)
+                    if isinstance(date, datetime):
+                        date = date.strftime("%Y-%m-%d")
+                    elif isinstance(date, str):
+                        date = date[:10]
+
                     if len(keys) == 2 and keys[1]:  # only non-null pages
                         row = {
                             "Date": keys[0],
                             "Query": "__PAGE_TOTAL__",
-                            "Page": keys[1],
+                            "Page": keys[1] if len(keys) > 1 else "__NO_PAGE__",
                             "Country": "__NO_COUNTRY__",
                             "Device": "__NO_DEVICE__",
                             "SearchAppearance": "__NO_APPEARANCE__",
@@ -578,39 +725,40 @@ def main():
                             "Position": r.get("position", 0.0),
                             "SearchType": stype,
                         }
-                        unique_key = generate_unique_key(row)
+
+                        # استفاده از تابع جدید unified
+                        unique_key = generate_expanded_unique_key(row, dims_for_batch)
                         if unique_key not in existing_keys:
                             existing_keys.add(unique_key)
                             row["unique_key"] = unique_key
                             all_rows.append(row)
-                            new_b4 += 1
+                            new_b7 += 1
 
                 if len(rows) < ROW_LIMIT:
                     break
                 start_row += len(rows)
 
-        inserted_b4 = 0
+        inserted_b7 = 0
         if all_rows:
-            df_batch4 = pd.DataFrame(all_rows)
-            print(f"[INFO] Batch 6 fetched rows: {len(df_batch4)}", flush=True)
-            if not df_batch4.empty:
-                inserted_b4 = upload_to_bq(df_batch4)
-                print(f"[INFO] Batch 6: Inserted {inserted_b4} new rows to BigQuery.", flush=True)
+            df_batch7 = pd.DataFrame(all_rows)
+            print(f"[INFO] Batch 7 fetched rows: {len(df_batch7)}", flush=True)
+            if not df_batch7.empty:
+                inserted_b7 = upload_to_bq(df_batch7)
+                print(f"[INFO] Batch 7: Inserted {inserted_b7} new rows to BigQuery.", flush=True)
         else:
-            df_batch4 = pd.DataFrame([])
-            print("[INFO] Batch 6: No non-null page rows found.", flush=True)
+            print("[INFO] Batch 7: No non-null page rows found.", flush=True)
 
-        print(f"[INFO] Batch 6 summary: fetched_total={fetched_b4}, new_candidates={new_b4}, inserted={inserted_b4}", flush=True)
+        print(f"[INFO] Batch 7 summary: fetched_total={fetched_b7}, new_candidates={new_b7}, inserted={inserted_b7}", flush=True)
 
     except Exception as e:
         print(f"[ERROR] Failed to fetch Batch 6 (Date + Page): {e}", flush=True)
-        inserted_b4 = 0
-        df_batch4 = pd.DataFrame([])
+        inserted_b7 = 0
+        df_batch7 = pd.DataFrame([])
 
     # --- run isolated sitewide batch ---
     df_site, inserted_site = fetch_sitewide_batch(START_DATE, END_DATE, existing_keys)
 
-    total_all_inserted = inserted_main + inserted_noindex + inserted_b4 + inserted_site
+    total_all_inserted = inserted_main + inserted_noindex + inserted_b7 + inserted_site
 
     # Compose CSV output if requested
     if CSV_TEST_FILE:
@@ -622,9 +770,9 @@ def main():
             if 'df_noindex' in locals() and not df_noindex.empty:
                 df_noindex = robust_map_country_column(df_noindex, "Country", COUNTRY_MAP)
                 parts.append(df_noindex)
-            if 'df_batch4' in locals() and not df_batch4.empty:
-                df_batch4 = robust_map_country_column(df_batch4, "Country", COUNTRY_MAP)
-                parts.append(df_batch4)
+            if 'df_batch7' in locals() and not df_batch7.empty:
+                df_batch7 = robust_map_country_column(df_batch7, "Country", COUNTRY_MAP)
+                parts.append(df_batch7)
             if 'df_site' in locals() and not df_site.empty:
                 df_site = robust_map_country_column(df_site, "Country", COUNTRY_MAP)
                 parts.append(df_site)
@@ -644,7 +792,7 @@ def main():
     print("[INFO] Final summary:", flush=True)
     print(f"  - fetch_gsc_data inserted: {inserted_main}", flush=True)
     print(f"  - noindex inserted:       {inserted_noindex}", flush=True)
-    print(f"  - batch4 inserted:        {inserted_b4}", flush=True)
+    print(f"  - batch7 inserted:        {inserted_b7}", flush=True)
     print(f"  - sitewide inserted:      {inserted_site}", flush=True)
     print(f"[INFO] Total new rows fetched/inserted: {total_all_inserted}", flush=True)
     print("[INFO] Finished.", flush=True)
