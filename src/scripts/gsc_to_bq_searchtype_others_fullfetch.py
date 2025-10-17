@@ -420,7 +420,7 @@ def fetch_gsc_data(start_date, end_date, existing_keys):
     print(f"[INFO] Fetch_GSC_Data summary: fetched_overall={total_fetched_overall}, new_candidates_overall={total_new_candidates_overall}, inserted_overall={total_inserted}", flush=True)
     return df_all_new, total_inserted
 
-# ---------- Batch 5: Isolated No-Index fetch ----------
+# ---------- Batch 6: Isolated No-Index fetch ----------
 def fetch_noindex_batch(start_date, end_date, existing_keys):
     """
     Fetch rows where 'page' is NULL/empty in dimensions ['date','page'].
@@ -437,7 +437,7 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
     for stype in SEARCH_TYPES:
         start_row = 0
         while True:
-            print(f"[INFO] Batch 5, No-Index fetch for stype={stype}, startRow={start_row}", flush=True)
+            print(f"[INFO] Batch 6, No-Index fetch for stype={stype}, startRow={start_row}", flush=True)
             request = {
                 "startDate": start_date,
                 "endDate": end_date,
@@ -449,7 +449,7 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
             try:
                 resp = service.searchanalytics().query(siteUrl=SITE_URL, body=request).execute()
             except Exception as e:
-                print(f"[ERROR] Batch 5, No-Index fetch error for stype={stype}: {e}, retrying in {RETRY_DELAY} sec...", flush=True)
+                print(f"[ERROR] Batch 6, No-Index fetch error for stype={stype}: {e}, retrying in {RETRY_DELAY} sec...", flush=True)
                 time.sleep(RETRY_DELAY)
                 continue
 
@@ -494,9 +494,9 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
     if not df_noindex.empty:
         inserted = upload_to_bq(df_noindex)
         inserted_total += inserted
-        print(f"[INFO] Batch 5, No-Index: fetched={fetched_total}, new_candidates={new_candidates}, inserted={inserted}", flush=True)
+        print(f"[INFO] Batch 6, No-Index: fetched={fetched_total}, new_candidates={new_candidates}, inserted={inserted}", flush=True)
     else:
-        print(f"[INFO] Batch 5, No-Index: no new rows found.", flush=True)
+        print(f"[INFO] Batch 6, No-Index: no new rows found.", flush=True)
 
     return df_noindex, inserted_total
 
