@@ -500,14 +500,14 @@ def fetch_noindex_batch(start_date, end_date, existing_keys):
 
     return df_noindex, inserted_total
 
-# ---------- Batch 7: SITEWIDE (ISOLATED) ----------
+# ---------- Batch 8: SITEWIDE (ISOLATED) ----------
 def fetch_sitewide_batch(start_date, end_date, existing_keys):
     """
     Sitewide: dimensions = ['date']
     Inserts __SITE_TOTAL__ rows per searchType and placeholder dates for missing days.
     Returns (df_all_new_rows, inserted_count)
     """
-    print("[INFO] Batch 7: Running sitewide ['date']...", flush=True)
+    print("[INFO] Batch 8: Running sitewide ['date']...", flush=True)
     service = get_gsc_service()
     all_new_rows = []
     total_new_count = 0
@@ -539,7 +539,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
     for stype in SEARCH_TYPES:
         start_row = 0
         while True:
-            print(f"[INFO] Batch 7: Sitewide fetch for stype={stype}, startRow={start_row}", flush=True)
+            print(f"[INFO] Batch 8: Sitewide fetch for stype={stype}, startRow={start_row}", flush=True)
             request = {
                 "startDate": start_date,
                 "endDate": end_date,
@@ -551,7 +551,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
             try:
                 resp = service.searchanalytics().query(siteUrl=SITE_URL, body=request).execute()
             except Exception as e:
-                print(f"[ERROR] Batch 7: Sitewide error (stype={stype}): {e}, retrying in {RETRY_DELAY} sec...", flush=True)
+                print(f"[ERROR] Batch 8: Sitewide error (stype={stype}): {e}, retrying in {RETRY_DELAY} sec...", flush=True)
                 time.sleep(RETRY_DELAY)
                 continue
 
@@ -646,7 +646,7 @@ def fetch_sitewide_batch(start_date, end_date, existing_keys):
         total_new_count += inserted
         all_new_rows.extend(placeholders_only)
 
-    print(f"[INFO] Batch 7, Sitewide done: fetched_total={fetched_total}, new_candidates={new_candidates}, inserted={total_new_count}", flush=True)
+    print(f"[INFO] Batch 8, Sitewide done: fetched_total={fetched_total}, new_candidates={new_candidates}, inserted={total_new_count}", flush=True)
     return pd.DataFrame(all_new_rows), total_new_count
 
 # ---------- MAIN ----------
