@@ -705,7 +705,7 @@ def main():
     if CSV_TEST_FILE:
         try:
             parts = []
-            if not df_new.empty:
+            if 'df_new' in locals() and not df_new.empty:
                 df_new = robust_map_country_column(df_new, "Country", COUNTRY_MAP)
                 parts.append(df_new)
             if 'df_noindex' in locals() and not df_noindex.empty:
